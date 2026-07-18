@@ -16,12 +16,19 @@
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-17, Confidence 0.75 (DRY selection +
 //  compiles; the look in each surface is verify-by-run). Prior: VoiceModeView.avatar.
+//  Review: claude-fable-5, 2026-07-18 — `paused` pass-through added so
+//  AvatarChatBackground can finally honor ChatBackdropTreatment.animatesMotion
+//  (recede/still/Reduce Motion freeze the pixel face; constellation + companion
+//  surfaces don't take a pause yet — logged follow-up, they receive it as a
+//  no-op param when they do).
 
 import M1K3Avatar
 import SwiftUI
 
 struct AvatarSurface: View {
     let env: AppEnvironment
+    /// Freeze idle motion (pixel-face surface only today — see header Review).
+    var paused = false
     @AppStorage(AppEnvironment.voiceCompanionKey) private var companion = ""
 
     var body: some View {
@@ -38,7 +45,7 @@ struct AvatarSurface: View {
             CompanionAvatarView(controller: env.avatar, companion: spec)
                 .id(spec.id)
         } else {
-            AvatarView(controller: env.avatar)
+            AvatarView(controller: env.avatar, paused: paused)
         }
     }
 }

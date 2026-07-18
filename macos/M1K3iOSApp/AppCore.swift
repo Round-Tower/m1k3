@@ -90,6 +90,10 @@ final class AppCore {
     nonisolated static let selectedBrainKey = "selectedBrain"
     nonisolated static let hasChosenBrainKey = "hasChosenBrain"
     nonisolated static let webSearchEnabledKey = "webSearchEnabled"
+    /// The full-bleed reactive avatar behind chat — default ON; the Settings
+    /// toggle is the opt-out (the Mac's avatarDisplay panel/background choice,
+    /// collapsed to a switch). Reduce Transparency also disables it, unstored.
+    nonisolated static let avatarBackdropKey = "avatarBackdrop"
     /// Memory auto-capture toggle — default ON (matches the Mac). Off = M1K3
     /// never distils durable facts from your chat.
     nonisolated static let memoryAutoCaptureKey = "memoryAutoCapture"

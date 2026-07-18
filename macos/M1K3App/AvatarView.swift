@@ -16,6 +16,10 @@
 //  Review: Kev + claude-sonnet-4-6, 2026-06-08 — pivoted from the M1K3 wordmark to
 //  an emoting face per Kev's feedback; same fixed-grid / mutate-emission renderer,
 //  AvatarScene stays non-@Observable (the mutate-during-update crash fix).
+//  Review: claude-fable-5, 2026-07-18 — `paused` flag on AvatarView + CRTOverlay
+//  (default false, all existing call sites unchanged): the missing consumer for
+//  ChatBackdropTreatment.animatesMotion. Both 30fps TimelineViews take
+//  paused: — a frozen face renders one frame and stops the clocks.
 
 // AppKit on macOS, UIKit on iOS/visionOS — the avatar is brand-default and now
 // cross-platform (the pixel face is pure RealityKit + SwiftUI; only the accent
@@ -56,6 +60,12 @@ final class AvatarScene {
 
 struct AvatarView: View {
     let controller: AvatarController
+    /// Freeze the idle motion (and the CRT pass) — the consumer for
+    /// ChatBackdropTreatment.animatesMotion, which promised "recede/still stop
+    /// moving" but had no consumer until 2026-07-18. A paused face renders one
+    /// crisp frame and goes quiet: no 30fps cube churn under a live blur, no
+    /// battery cost under Low Power, no drift under Reduce Motion.
+    var paused = false
 
     @State private var scene = AvatarScene()
 
@@ -112,7 +122,7 @@ struct AvatarView: View {
                 animate(at: time)
             }
         }
-        .overlay(CRTOverlay())
+        .overlay(CRTOverlay(paused: paused))
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
@@ -213,8 +223,9 @@ struct AvatarView: View {
 
     /// 30 fps throughout — the idle micro-jitter + LED flicker need a steady 30 fps
     /// to read as a smooth analog shiver rather than aliasing into a slow wobble.
+    /// `paused` stops the clock entirely (one last frame renders, then quiet).
     private var schedule: AnimationTimelineSchedule {
-        AnimationTimelineSchedule(minimumInterval: 1.0 / 30.0)
+        AnimationTimelineSchedule(minimumInterval: 1.0 / 30.0, paused: paused)
     }
 }
 
@@ -231,6 +242,9 @@ struct AvatarView: View {
 /// Signed: Kev + claude-fable-5, 2026-06-11, Confidence 0.6 (spike — constants
 /// are first-guess, judged by eye, not measured), Prior: Unknown.
 struct CRTOverlay: View {
+    /// Freeze the rolling band + phosphor breathe (see AvatarView.paused).
+    var paused = false
+
     /// Elapsed-time origin — sin/cos arguments stay small (the
     /// AudioCaptureBackdrop precision lesson; see AvatarScene.startDate).
     @State private var start = Date()
@@ -252,7 +266,7 @@ struct CRTOverlay: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: paused)) { context in
             let time = context.date.timeIntervalSince(start)
             Canvas { canvas, size in
                 drawScanlines(canvas, size: size, time: time)
