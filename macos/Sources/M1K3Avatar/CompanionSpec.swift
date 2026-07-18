@@ -122,13 +122,29 @@ public struct CompanionSpec: Equatable, Sendable, Identifiable {
         clips: ["Idle_A", "Idle_B", "Walk", "Run", "Jump", "Fear", "Sit", "Clicked", "Swim", "Fly"]
     )
 
-    /// Gecko (Quaternius dialect) was dropped 2026-06-21 — its converted clips
-    /// didn't animate on-device. The `.quaternius` dialect stays for the next
-    /// companion that speaks it; a stale "Gecko" picker id resolves to nil via
-    /// `named`, so it degrades to the pixel face rather than a broken creature.
-    /// (The 07-09 jam pair re-ran the pipeline and rkprobe CONFIRMS harvested
-    /// animations in their clips — the gecko failure mode was checked, not assumed.)
-    public static let all: [CompanionSpec] = [.fox, .inkfish, .sparrow]
+    /// Gecko's comeback (2026-07-17). Dropped 2026-06-21 when her converted
+    /// clips froze on-device — later root-caused in #20 as two stacked traps
+    /// (a SkelRoot prim named `Rig`, which RealityKit refuses to bind, and the
+    /// Quirky pack's 11-frame compressed takes), both fixed in the pipeline.
+    /// Re-exported with --retime 4; rkprobe --tick verified 8/8 clips MOVES.
+    /// First creature to speak the plain `.quaternius` dialect.
+    public static let gecko = CompanionSpec(
+        id: "Gecko",
+        displayName: "Gecko",
+        dialect: .quaternius,
+        clips: ["Idle_A", "Idle_B", "Walk", "Run", "Jump", "Fear", "Sit", "Clicked"]
+    )
+
+    /// Colobus (2026-07-17, same pipeline run as the gecko comeback):
+    /// re-exported with --retime 4, rkprobe --tick 8/8 MOVES.
+    public static let colobus = CompanionSpec(
+        id: "Colobus",
+        displayName: "Colobus",
+        dialect: .quaternius,
+        clips: ["Idle_A", "Idle_B", "Walk", "Run", "Jump", "Fear", "Sit", "Clicked"]
+    )
+
+    public static let all: [CompanionSpec] = [.fox, .inkfish, .sparrow, .gecko, .colobus]
 
     /// Resolve a persisted picker id to a spec. The empty string (and any unknown
     /// id) means "pixel face" — the default — and returns nil.
