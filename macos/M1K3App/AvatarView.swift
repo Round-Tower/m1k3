@@ -30,6 +30,14 @@
     import UIKit
 #endif
 import M1K3Avatar
+
+// RealityView's content type differs per platform: camera-capable on
+// macOS/iOS, plain (eyes-are-the-camera) on visionOS.
+#if os(visionOS)
+    typealias AvatarRealityContent = RealityViewContent
+#else
+    typealias AvatarRealityContent = RealityViewCameraContent
+#endif
 import RealityKit
 import SwiftUI
 
@@ -83,6 +91,27 @@ struct AvatarView: View {
     private static let litSwell: Float = 0.15
 
     var body: some View {
+        #if os(visionOS)
+            // visionOS IGNORES in-scene cameras — the user's eyes are the camera
+            // and RealityView content renders at TRUE world scale, so the ~1.3 m
+            // face grid overflowed the window volume unseen (the V0 spike's
+            // black-avatar root cause, 2026-07-18). No camera; instead fit the
+            // grid to the view's own bounds, re-fitted on timeline ticks so
+            // window resizes track (a paused face re-fits on the next unpause).
+            GeometryReader3D { geometry in
+                faceCore(fit: { content, root in
+                    Self.fit(root: root, to: geometry, in: content)
+                })
+            }
+        #else
+            faceCore(fit: nil)
+        #endif
+    }
+
+    /// The shared TimelineView + RealityView core. `fit` is the visionOS
+    /// framing strategy (scale-to-view-bounds); nil means macOS/iOS, where a
+    /// head-on PerspectiveCamera frames the grid instead.
+    private func faceCore(fit: ((AvatarRealityContent, Entity) -> Void)?) -> some View {
         TimelineView(schedule) { context in
             RealityView { content in
                 // Build once: one cube per matrix cell, each with its own material
@@ -105,10 +134,17 @@ struct AvatarView: View {
                 }
                 content.add(root)
 
-                // A head-on camera so the matrix face reads flat-but-dimensional.
-                let camera = PerspectiveCamera()
-                camera.look(at: .zero, from: [0, 0, 2.6], relativeTo: nil)
-                content.add(camera)
+                if let fit {
+                    fit(content, root)
+                } else {
+                    #if !os(visionOS)
+                        // A head-on camera so the matrix face reads
+                        // flat-but-dimensional (macOS/iOS only — see body).
+                        let camera = PerspectiveCamera()
+                        camera.look(at: .zero, from: [0, 0, 2.6], relativeTo: nil)
+                        content.add(camera)
+                    #endif
+                }
 
                 scene.root = root
                 scene.cubes = cubes
@@ -116,8 +152,11 @@ struct AvatarView: View {
                 scene.cells = cells
                 scene.startDate = context.date
                 scene.built = true
-            } update: { _ in
+            } update: { content in
                 guard scene.built else { return }
+                if let fit, let root = scene.root {
+                    fit(content, root)
+                }
                 let time = context.date.timeIntervalSince(scene.startDate)
                 animate(at: time)
             }
@@ -126,6 +165,20 @@ struct AvatarView: View {
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
+
+    #if os(visionOS)
+        /// Scale + centre the face grid inside the view's scene-space bounds.
+        /// 0.9: headroom for the lit-cell swell and expression column shifts.
+        private static func fit(root: Entity, to geometry: GeometryProxy3D, in content: AvatarRealityContent) {
+            let bounds = content.convert(geometry.frame(in: .local), from: .local, to: .scene)
+            let gridWidth = Float(FaceGrid.cols - 1) * spacing + cubeSize
+            let gridHeight = Float(FaceGrid.rows - 1) * spacing + cubeSize
+            let scale = min(bounds.extents.x / gridWidth, bounds.extents.y / gridHeight) * 0.9
+            guard scale.isFinite, scale > 0 else { return }
+            root.scale = SIMD3(repeating: scale)
+            root.position = bounds.center
+        }
+    #endif
 
     // MARK: - Per-frame animation
 
