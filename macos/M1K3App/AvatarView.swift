@@ -20,6 +20,12 @@
 //  (default false, all existing call sites unchanged): the missing consumer for
 //  ChatBackdropTreatment.animatesMotion. Both 30fps TimelineViews take
 //  paused: — a frozen face renders one frame and stops the clocks.
+//  Review: claude-fable-5, 2026-07-18 (later) — visionOS framing: no in-scene
+//  camera there (eyes are the camera; content renders at true world scale), so
+//  the face fit-scales to the view's scene-space bounds via GeometryReader3D.
+//  Fit writes the outer `frame` node; jitter keeps owning `root` — separate
+//  writers after the PR #60 review caught the per-tick position clobber.
+//  macOS/iOS behaviour byte-for-byte unchanged (camera path, identity frame).
 
 // AppKit on macOS, UIKit on iOS/visionOS — the avatar is brand-default and now
 // cross-platform (the pixel face is pure RealityKit + SwiftUI; only the accent
@@ -51,6 +57,11 @@ import SwiftUI
 /// storage the view never observes — TimelineView's clock drives redraws.
 @MainActor
 final class AvatarScene {
+    /// The fit-owned OUTER node (visionOS window framing writes scale/position
+    /// here). Separate from `root` so the per-tick jitter in `animateBody` —
+    /// which assigns `root.position` outright — can never clobber the framing
+    /// (PR #60 review catch). Identity on macOS/iOS (the camera frames there).
+    var frame: Entity?
     var root: Entity?
     var cubes: [ModelEntity] = []
     /// One material per cube, allocated once and mutated in place each frame —
@@ -99,8 +110,8 @@ struct AvatarView: View {
             // grid to the view's own bounds, re-fitted on timeline ticks so
             // window resizes track (a paused face re-fits on the next unpause).
             GeometryReader3D { geometry in
-                faceCore(fit: { content, root in
-                    Self.fit(root: root, to: geometry, in: content)
+                faceCore(fit: { content, frame in
+                    Self.fit(frame: frame, to: geometry, in: content)
                 })
             }
         #else
@@ -109,14 +120,19 @@ struct AvatarView: View {
     }
 
     /// The shared TimelineView + RealityView core. `fit` is the visionOS
-    /// framing strategy (scale-to-view-bounds); nil means macOS/iOS, where a
-    /// head-on PerspectiveCamera frames the grid instead.
+    /// framing strategy (scale-to-view-bounds, applied to the OUTER frame node
+    /// so the jitter's `root.position` writes can't clobber it); nil means
+    /// macOS/iOS, where a head-on PerspectiveCamera frames the grid instead.
     private func faceCore(fit: ((AvatarRealityContent, Entity) -> Void)?) -> some View {
         TimelineView(schedule) { context in
             RealityView { content in
                 // Build once: one cube per matrix cell, each with its own material
-                // (mutated in place each frame, never reallocated).
+                // (mutated in place each frame, never reallocated). Two nodes:
+                // `frame` is fit-owned (visionOS framing), `root` is
+                // animate-owned (jitter) — separate writers, no clobbering.
+                let frame = Entity()
                 let root = Entity()
+                frame.addChild(root)
                 var cubes: [ModelEntity] = []
                 var materials: [UnlitMaterial] = []
                 let cells = FaceGrid.allCells()
@@ -132,10 +148,10 @@ struct AvatarView: View {
                     cubes.append(cube)
                     materials.append(material)
                 }
-                content.add(root)
+                content.add(frame)
 
                 if let fit {
-                    fit(content, root)
+                    fit(content, frame)
                 } else {
                     #if !os(visionOS)
                         // A head-on camera so the matrix face reads
@@ -146,6 +162,7 @@ struct AvatarView: View {
                     #endif
                 }
 
+                scene.frame = frame
                 scene.root = root
                 scene.cubes = cubes
                 scene.materials = materials
@@ -154,8 +171,8 @@ struct AvatarView: View {
                 scene.built = true
             } update: { content in
                 guard scene.built else { return }
-                if let fit, let root = scene.root {
-                    fit(content, root)
+                if let fit, let frame = scene.frame {
+                    fit(content, frame)
                 }
                 let time = context.date.timeIntervalSince(scene.startDate)
                 animate(at: time)
@@ -168,15 +185,24 @@ struct AvatarView: View {
 
     #if os(visionOS)
         /// Scale + centre the face grid inside the view's scene-space bounds.
-        /// 0.9: headroom for the lit-cell swell and expression column shifts.
-        private static func fit(root: Entity, to geometry: GeometryProxy3D, in content: AvatarRealityContent) {
+        /// Writes ONLY the outer frame node — the jitter owns `root` (see
+        /// faceCore). 0.9: headroom for the lit-cell swell + column shifts.
+        /// A side bonus of the split: the jitter runs in fitted-frame space,
+        /// so it scales with the face instead of being ±0.008 world metres.
+        private static func fit(frame: Entity, to geometry: GeometryProxy3D, in content: AvatarRealityContent) {
             let bounds = content.convert(geometry.frame(in: .local), from: .local, to: .scene)
             let gridWidth = Float(FaceGrid.cols - 1) * spacing + cubeSize
             let gridHeight = Float(FaceGrid.rows - 1) * spacing + cubeSize
             let scale = min(bounds.extents.x / gridWidth, bounds.extents.y / gridHeight) * 0.9
             guard scale.isFinite, scale > 0 else { return }
-            root.scale = SIMD3(repeating: scale)
-            root.position = bounds.center
+            frame.scale = SIMD3(repeating: scale)
+            // Deliberately NO position write: content entity space is already
+            // window-relative with its origin at the view, so the grid is
+            // centred as built. Writing bounds.center (scene space) here
+            // double-offsets the face out of view — proven empirically: the
+            // first cut did it, and only the jitter clobbering root.position
+            // back to ~zero each tick made it LOOK right (screenshot A/B'd
+            // both ways, 2026-07-18). Scale is the only fit dimension.
         }
     #endif
 
