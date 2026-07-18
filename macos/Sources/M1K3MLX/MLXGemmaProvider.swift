@@ -578,8 +578,12 @@ extension MLXGemmaProvider {
     /// opening tag in the output, so it is deliberately NOT listed.
     static func templatePreOpensThink(for configuration: ModelConfiguration) -> Bool {
         let modelName = configuration.name.lowercased()
+        // Bonsai-27B is qwen3_5 under a brand id with no qwen spelling — its
+        // template ends the generation prompt with an opened <think> (verified
+        // against the HF chat_template.jinja 2026-07-17). Exact size id, per
+        // the #41 doctrine: the 8B is dense Qwen3 and must NOT match.
         return modelName.contains("qwen3.5") || modelName.contains("qwen3_5")
-            || modelName.contains("qwen3-5")
+            || modelName.contains("qwen3-5") || modelName.contains("ternary-bonsai-27b")
     }
 
     /// Whether the family's chat template understands the `enable_thinking` switch
@@ -598,7 +602,11 @@ extension MLXGemmaProvider {
         // the toggle would leave the reasoning picker a dead control. The
         // Instruct variant is the wired lil since 2026-07-16.
         let name = configuration.name.lowercased()
-        return name.contains("qwen3") && !name.contains("2507")
+        // Bonsai-27B's qwen3_5 template reads enable_thinking (verified against
+        // the HF chat_template.jinja 2026-07-17) — the 8B stays out (its
+        // template carries no switch, pinned 2026-07-15).
+        return (name.contains("qwen3") && !name.contains("2507"))
+            || name.contains("ternary-bonsai-27b")
     }
 
     /// Allow-list of families whose attention routes through upstream's
@@ -615,10 +623,14 @@ extension MLXGemmaProvider {
         // Ternary-Bonsai-8B (prism-ml) is dense Qwen3 under a brand id —
         // model_type "qwen3" → Qwen3Model → attentionWithCacheUpdate, so
         // quantized KV routes safely (verified against the 8B config 2026-07-15).
-        // Exact size id on purpose: the Qwen3.6-based 27B is unverified and
-        // must fall to the crash-safe default, not inherit this allow-list.
+        // The 27B is qwen3_5 (config verified 2026-07-17): Qwen35Model's
+        // full-attention layers route through attentionWithCacheUpdate too
+        // (Qwen35.swift:367, re-audited at 3.31.4), and quantized KV ran in
+        // production on this arch when lil was Qwen3.5-4B — the old
+        // unverified-default exclusion lifts. Still exact size ids on purpose.
         return modelName.contains("qwen3") || modelName.contains("gemma-3-")
             || modelName.contains("ternary-bonsai-8b")
+            || modelName.contains("ternary-bonsai-27b")
     }
 
     /// Prepend the synthetic `<think>` opener exactly once so downstream

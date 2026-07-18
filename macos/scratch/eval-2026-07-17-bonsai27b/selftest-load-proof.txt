@@ -1,0 +1,14 @@
+=== M1K3 SELF-TEST (inside .app bundle) ===
+✓ store+ingest: 1 chunk, 1 embedding(s)
+• AFM available: false
+• loading MLX Qwen3-Embedding (downloads on first use)…
+✓ MLX Qwen3-Embedding embed: dim=512 ‖v‖=1.000
+embedwarm: cold=3564ms warm=13ms delta=3551ms (delta = first-turn TTFT tax without the launch warm)
+• loading MLX generation model prism-ml/Ternary-Bonsai-27B-mlx-2bit…
+✓ MLX generate: <think>Here's a thinking process:
+
+1.  **Analyze User Input:**
+   - Question: "In one short sentence, what is a hydraulic seal?"
+   - Constraint: One short sentence.
+   - Persona: 
+=== END SELF-TEST ===
