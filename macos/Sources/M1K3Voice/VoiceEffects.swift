@@ -7,6 +7,11 @@
 //  unit-tested.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8, Prior: Unknown
+//  Review: Kev + Claude, 2026-07-19 — BandpassEffect is now a cascaded Butterworth
+//  HPF+LPF (near-unity passband) instead of a single constant-skirt biquad whose peak
+//  gain ≈ Q ≈ 0.33 scooped the whole band ~10 dB and starved the compressor after it.
+//  CompressionEffect doc corrected: it's an instantaneous per-sample soft-clip, not an
+//  envelope compressor. Pinned by bandpassPassbandNearUnity + compressorEngagesAfterNormalise.
 
 import Foundation
 

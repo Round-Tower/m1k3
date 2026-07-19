@@ -269,6 +269,18 @@ class ExportManager(private val database: MaDatabase) {
      * transaction, so a partial/failed restore rolls back rather than leaving an
      * orphaned row.
      *
+     * Restore is LOSSY, matching the export format: only role/content/timestamp/
+     * tokens round-trip. Message `image_uri`, sentiment (`sentiment_*`), and RAG
+     * metadata (`rag_sources`/`rag_confidence`) are never serialized by
+     * [exportConversationToJson], so they come back null — a restored conversation
+     * loses image attachments, RAG citations, and sentiment history. The
+     * conversation's archived state isn't exported either, so a restore always
+     * lands active.
+     *
+     * Blocking DB work, like the sibling `export*` methods: this opens a SQLCipher
+     * write transaction and loops inserts synchronously, so a UI caller must run it
+     * off the main thread (e.g. `withContext(Dispatchers.IO)`).
+     *
      * @param projectId Project to import into; must name an existing project.
      * @param json JSON export string (as produced by [exportConversationToJson])
      * @return New conversation ID, or null if the JSON could not be parsed OR
@@ -298,7 +310,9 @@ class ExportManager(private val database: MaDatabase) {
         // explicit check is what stops a typo'd/stale projectId from silently inserting
         // an orphaned conversation that no project screen can ever reach
         // (getConversationsByProject filters by plain string equality). getLastInsertId()
-        // reads this insert on the same connection. Mirrors SqlDelightPassageRepository.
+        // reads this insert on the same connection. The transaction-wrapping follows
+        // SqlDelightPassageRepository.saveSource; the rollback()-to-reject is this
+        // path's own (saveSource doesn't reject mid-transaction).
         var newConversationId: Long? = null
         database.transaction {
             // Unknown target project → roll back and leave newConversationId null, so

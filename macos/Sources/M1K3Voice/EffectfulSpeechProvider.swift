@@ -219,22 +219,31 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     /// audible playback OR its still-silent synthesis window (which `isSpeaking()`
     /// can't see) — so it unwinds and frees the gate. Returns this entry's token.
     /// Internal so the streaming entry point (in +Streaming.swift) shares it.
+    ///
+    /// The bump and the "is a render already active?" sample happen in ONE MainActor
+    /// hop. Done as two hops, an older caller could bump, suspend, let a NEWER caller
+    /// start rendering, then resume, observe "busy", and stop() that newer render —
+    /// breaking "latest wins" and dropping BOTH utterances (two genuinely concurrent
+    /// callers exist: the MCP speak endpoint and the voice loop). Sampled atomically
+    /// with the bump, `wasBusy` is true only for a render already in flight when we
+    /// claimed our generation — i.e. strictly older than us, so superseding it is
+    /// correct. (Busy = audible playback OR a render mid-pipeline, covering the
+    /// offline-synth window before `fireSpeakingStarted` that `isSpeaking()` alone
+    /// can't see.)
+    ///
+    /// Residual, verify-by-launch: `stop()` still runs after a suspension, so a tight
+    /// 3-way interleaving — an older render finishing and a newer one starting between
+    /// our sample and our `stop()` — could still clip a newer render. Far narrower
+    /// than the 2-way race above; a fully airtight fix needs a generation-guarded
+    /// stop, deferred to keep this change small.
     func claimEntry() async -> Int {
-        let generation = await MainActor.run { () -> Int in
+        let (generation, wasBusy) = await MainActor.run { () -> (Int, Bool) in
             speakGeneration += 1
-            return speakGeneration
+            let busy = speakingState.isSpeaking(streamingActive: streamingSession != nil) || renderInFlight
+            return (speakGeneration, busy)
         }
-        if await isBusy() { await stop() }
+        if wasBusy { await stop() }
         return generation
-    }
-
-    /// Busy = audible playback OR a render mid-pipeline (covers the offline-synth
-    /// window before `fireSpeakingStarted`, which the playback-only `isSpeaking()`
-    /// reports as idle — the exact gap the racing speak()s slipped through).
-    private func isBusy() async -> Bool {
-        await MainActor.run {
-            speakingState.isSpeaking(streamingActive: streamingSession != nil) || renderInFlight
-        }
     }
 
     /// Run one render under the gate. Bails if a newer speak() superseded this entry

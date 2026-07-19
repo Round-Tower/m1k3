@@ -12,6 +12,10 @@
 //  "M1K3 character" is just one preset.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8, Prior: Unknown
+//  Review: Kev + Claude, 2026-07-19 — m1k3Character now normalises to full-scale
+//  BEFORE the soft-clip (CompressionEffect was an inert no-op below its 0.6 threshold
+//  after the bandpass attenuation), then normalises to 0.85 for a headroom-safe
+//  output. Order is load-bearing; see the preset doc + `compressorEngagesAfterNormalise`.
 
 /// One stage in the voice pipeline. Transforms a mono sample buffer in place of
 /// value semantics (returns a new buffer), given the sample rate for any

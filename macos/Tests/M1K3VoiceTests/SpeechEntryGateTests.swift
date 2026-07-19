@@ -98,4 +98,26 @@ struct SpeechEntryGateTests {
         await provider.runRender(currentGeneration) { ranCurrent.value = true }
         #expect(ranCurrent.value == true)
     }
+
+    @Test("truly-concurrent claimEntry calls get distinct, gap-free generations")
+    func concurrentClaimEntryGenerationsAreDistinct() async {
+        // The bump must be atomic under real task contention — no two callers may
+        // share a generation (which would let a stale entry masquerade as current)
+        // and none may be lost. A fresh provider is idle, so no claim triggers stop().
+        let provider = EffectfulSpeechProvider()
+        let count = 64
+
+        let generations = await withTaskGroup(of: Int.self) { group in
+            for _ in 0 ..< count {
+                group.addTask { await provider.claimEntry() }
+            }
+            var collected: [Int] = []
+            for await generation in group { collected.append(generation) }
+            return collected
+        }
+
+        #expect(generations.count == count)
+        #expect(Set(generations).count == count) // all distinct — no lost/duplicated bumps
+        #expect(Set(generations) == Set(1 ... count)) // gap-free 1...count
+    }
 }
