@@ -71,11 +71,17 @@ struct ContentView: View {
     private static let chatContentMaxWidth: CGFloat = 760
 
     /// Bridges the persisted Bool to NavigationSplitView's own visibility
-    /// type (not directly storable). A 2-column split only ever toggles
-    /// between `.all` and `.detailOnly`, so a Bool is sufficient.
+    /// type (not directly storable). `.automatic` — not `.all` — is the
+    /// "shown" value: it's what gives the sidebar native auto-collapse/
+    /// overlay behavior on a narrow window (the same adaptive behavior
+    /// Mail/Xcode's own sidebars get), without any hand-rolled width
+    /// tracking. The system manages narrow-width collapsing internally and
+    /// doesn't round-trip through this setter for it, so a pure
+    /// width-driven collapse never touches the persisted preference — only
+    /// an explicit toggle-button tap (which DOES set `.detailOnly`) does.
     private var columnVisibility: Binding<NavigationSplitViewVisibility> {
         Binding(
-            get: { sidebarVisible ? .all : .detailOnly },
+            get: { sidebarVisible ? .automatic : .detailOnly },
             set: { sidebarVisible = $0 != .detailOnly }
         )
     }
