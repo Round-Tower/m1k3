@@ -109,23 +109,27 @@ struct SidebarView: View {
     private var footer: some View {
         VStack(spacing: 0) {
             Divider()
-            VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
                 SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                    Image(systemName: "gearshape")
+                        .imageScale(.large)
                 }
                 .help("M1K3 settings (⌘,)")
+                .accessibilityLabel("Settings")
+
                 Button {
                     openWindow(id: M1K3App.agentLogWindowID)
                 } label: {
-                    Label("Agent Log", systemImage: "list.bullet.rectangle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                    Image(systemName: "list.bullet.rectangle")
+                        .imageScale(.large)
                 }
-                .help("Review MCP tool calls captured from connected agents (opt-in)")
+                .help("Agent Log — MCP tool calls captured from connected agents (opt-in)")
+                .accessibilityLabel("Agent Log")
+
+                Spacer()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
