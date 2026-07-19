@@ -272,24 +272,15 @@ class ExportManager(private val database: MaDatabase) {
      * @param projectId Project to import into; must name an existing project.
      * @param json JSON export string (as produced by [exportConversationToJson])
      * @return New conversation ID, or null if the JSON could not be parsed OR
-     *   [projectId] does not name an existing project (both are rejected up front
-     *   without writing anything). A genuine database error during the transaction
+     *   [projectId] does not name an existing project — both yield null without
+     *   writing anything (the project check runs inside the restore transaction,
+     *   atomic with the insert). A genuine database error during the transaction
      *   still propagates — only bad input yields null.
      */
     fun importConversationFromJson(projectId: String, json: String): Long? {
         val export = try {
             this.json.decodeFromString<ConversationExport>(json)
         } catch (e: Exception) {
-            return null
-        }
-
-        // Reject an unknown target project the same way malformed JSON is rejected.
-        // FK enforcement (PRAGMA foreign_keys = ON) isn't set on the driver, so
-        // without this a typo'd/stale projectId would silently insert an orphaned
-        // conversation that no project screen can ever reach (getConversationsByProject
-        // filters by plain string equality) — a bad restore target would quietly eat
-        // the backup instead of failing.
-        if (database.projectQueries.getProjectById(projectId).executeAsOneOrNull() == null) {
             return null
         }
 
@@ -300,12 +291,23 @@ class ExportManager(private val database: MaDatabase) {
         val messageCount = export.messages.size.toLong()
         val tokenCount = export.messages.sumOf { (it.tokens ?: 0).toLong() }
 
-        // Parent row + every message in ONE transaction, so a mid-loop failure rolls
-        // back instead of leaving an orphaned conversation with mismatched counts,
-        // and getLastInsertId() reads this insert on the same connection with no
-        // interleaving writer. Mirrors SqlDelightPassageRepository.saveSource.
+        // Everything in ONE transaction — the target-project existence check INCLUDED,
+        // so the check is atomic with the insert (no window for the project to be
+        // deleted between checking and writing) and a mid-loop failure rolls back. FK
+        // enforcement (PRAGMA foreign_keys = ON) isn't set on the driver, so this
+        // explicit check is what stops a typo'd/stale projectId from silently inserting
+        // an orphaned conversation that no project screen can ever reach
+        // (getConversationsByProject filters by plain string equality). getLastInsertId()
+        // reads this insert on the same connection. Mirrors SqlDelightPassageRepository.
         var newConversationId: Long? = null
         database.transaction {
+            // Unknown target project → roll back and leave newConversationId null, so
+            // importConversationFromJson returns null (like the malformed-JSON path),
+            // having written nothing.
+            if (database.projectQueries.getProjectById(projectId).executeAsOneOrNull() == null) {
+                rollback()
+            }
+
             database.conversationMetadataQueries.insertConversation(
                 project_id = projectId,
                 title = export.title,
