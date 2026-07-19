@@ -253,21 +253,26 @@ class ExportManager(private val database: MaDatabase) {
         return "${dateTime.date} ${dateTime.hour}:${dateTime.minute.toString().padStart(2, '0')}"
     }
 
-    // ==================== Future: Import Functionality (Phase 2.1) ====================
+    // ==================== Import (backup restore) ====================
 
     /**
      * Import a conversation from JSON (backup restoration).
      *
      * Parses a JSON produced by [exportConversationToJson], creates a fresh
-     * conversation in [projectId] (preserving the exported title, timestamps and
-     * counts), and re-inserts every message under new, collision-free ids so the
-     * same backup can be restored more than once. The conversation is created
-     * under the target [projectId], not the project recorded in the export, so a
-     * backup can be restored into any project.
+     * conversation in [projectId] (preserving the exported title and timestamps;
+     * the message/token counts are recomputed from the restored messages rather
+     * than trusted from the JSON), and re-inserts every message under new,
+     * collision-free ids so the same backup can be restored more than once. The
+     * conversation is created under the target [projectId], not the project
+     * recorded in the export, so a backup can be restored into any project. The
+     * conversation row and all messages are written in a single transaction, so a
+     * partial/failed restore rolls back rather than leaving an orphaned row.
      *
      * @param projectId Project to import into
      * @param json JSON export string (as produced by [exportConversationToJson])
-     * @return New conversation ID, or null if the JSON could not be parsed
+     * @return New conversation ID, or null if the JSON could not be parsed. A
+     *   database error (e.g. an invalid [projectId]) propagates rather than
+     *   returning null — only a JSON parse failure yields null.
      */
     fun importConversationFromJson(projectId: String, json: String): Long? {
         val export = try {
@@ -276,41 +281,55 @@ class ExportManager(private val database: MaDatabase) {
             return null
         }
 
-        // Recreate the conversation, preserving the exported metadata.
-        database.conversationMetadataQueries.insertConversation(
-            project_id = projectId,
-            title = export.title,
-            started_at = export.startedAt,
-            last_message_at = export.lastMessageAt,
-            message_count = export.messageCount.toLong(),
-            token_count = export.tokenCount.toLong(),
-            is_archived = 0
-        )
+        // Derive the counts from the actual messages rather than trusting the
+        // exported metadata: a hand-edited or corrupted backup must not leave the
+        // conversation permanently reporting a message/token total that disagrees
+        // with the messages it actually restored.
+        val messageCount = export.messages.size.toLong()
+        val tokenCount = export.messages.sumOf { (it.tokens ?: 0).toLong() }
 
-        val newConversationId = database.conversationMetadataQueries
-            .getLastInsertId()
-            .executeAsOne()
-
-        // Re-insert messages with fresh ids keyed on the new conversation id, so
-        // restoring the same backup twice never collides on the message primary key.
-        export.messages.forEachIndexed { index, message ->
-            database.messageQueries.insertMessage(
-                id = "msg_${newConversationId}_$index",
+        // Parent row + every message in ONE transaction, so a mid-loop failure rolls
+        // back instead of leaving an orphaned conversation with mismatched counts,
+        // and getLastInsertId() reads this insert on the same connection with no
+        // interleaving writer. Mirrors SqlDelightPassageRepository.saveSource.
+        var newConversationId: Long? = null
+        database.transaction {
+            database.conversationMetadataQueries.insertConversation(
                 project_id = projectId,
-                conversation_id = newConversationId,
-                role = message.role,
-                content = message.content,
-                tokens = message.tokens?.toLong(),
-                timestamp = message.timestamp,
-                image_uri = null,
-                sentiment_valence = null,
-                sentiment_arousal = null,
-                sentiment_dominance = null,
-                sentiment_emotion = null,
-                sentiment_intensity = null,
-                rag_sources = null,
-                rag_confidence = null
+                title = export.title,
+                started_at = export.startedAt,
+                last_message_at = export.lastMessageAt,
+                message_count = messageCount,
+                token_count = tokenCount,
+                is_archived = 0
             )
+
+            val conversationId = database.conversationMetadataQueries
+                .getLastInsertId()
+                .executeAsOne()
+            newConversationId = conversationId
+
+            // Fresh ids keyed on the new conversation id, so restoring the same
+            // backup twice never collides on the message primary key.
+            export.messages.forEachIndexed { index, message ->
+                database.messageQueries.insertMessage(
+                    id = "msg_${conversationId}_$index",
+                    project_id = projectId,
+                    conversation_id = conversationId,
+                    role = message.role,
+                    content = message.content,
+                    tokens = message.tokens?.toLong(),
+                    timestamp = message.timestamp,
+                    image_uri = null,
+                    sentiment_valence = null,
+                    sentiment_arousal = null,
+                    sentiment_dominance = null,
+                    sentiment_emotion = null,
+                    sentiment_intensity = null,
+                    rag_sources = null,
+                    rag_confidence = null
+                )
+            }
         }
 
         return newConversationId

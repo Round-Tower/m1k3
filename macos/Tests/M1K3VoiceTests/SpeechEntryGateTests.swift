@@ -11,6 +11,8 @@
 //  that a superseded render's box is still the delegate when its didCancel arrives
 //  — stays verify-by-launch, per the provider's rule.
 //
+//  Signed: Kev + Claude, 2026-07-19, Confidence 0.85, Prior: Unknown
+//
 
 @testable import M1K3Voice
 import Testing

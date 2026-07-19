@@ -46,15 +46,19 @@
 //  calls that BOTH observed an idle provider could start two overlapping renders,
 //  leaking the loser's SynthBox continuation (it never became the synthesizer's
 //  delegate, so its terminal callback hit the winner's box and was ignored).
-//  speak()/speak(rawPCM:) now enter through a serial actor gate (SpeechEntryGate)
-//  carrying a generation token + a renderInFlight flag: renders run one-at-a-time,
-//  a newer call barge-in-interrupts the running one, and a superseded queued call
-//  bails — latest-wins, identity guard intact. Because the loser's
-//  synthesizeToFloats is now deferred until the predecessor unwinds, the
-//  predecessor's box is STILL the delegate when its didCancel arrives, so the
-//  continuation resolves instead of leaking. The gate's serialisation is
-//  unit-tested (SpeechEntryGateTests, headless); the live barge-in WIRING stays
-//  verify-by-launch.
+//  ALL THREE public speak entries — speak(), speak(rawPCM:) and the streaming
+//  speak(stream:) (the Kokoro/"M1K3 Voice" path, in +Streaming.swift) — now enter
+//  through a serial actor gate (SpeechEntryGate) carrying a generation token + a
+//  renderInFlight flag: renders run one-at-a-time, a newer call barge-in-interrupts
+//  the running one, and a superseded queued call bails — latest-wins, identity
+//  guard intact. Because the loser's synthesizeToFloats is now deferred until the
+//  predecessor unwinds, the predecessor's box is STILL the delegate when its
+//  didCancel arrives, so the continuation resolves instead of leaking. (speak(stream:)
+//  was added to the gate after review caught that the Kokoro path — the
+//  highest-traffic entry point — still bypassed it; renderText calls the internal
+//  un-gated renderStream to avoid self-deadlocking inside the gate.) The gate's
+//  serialisation is unit-tested (SpeechEntryGateTests, headless); the live barge-in
+//  WIRING stays verify-by-launch.
 
 import AVFoundation
 import Foundation
@@ -91,10 +95,13 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     @MainActor private var playbackContinuation: CheckedContinuation<Void, Never>?
     /// The in-flight chunked playback (speak(stream:)), so `stop()` can cancel it.
     @MainActor var streamingSession: StreamingPlaybackSession?
-    /// Serialises `speak()`/`speak(rawPCM:)` entry so two racing callers can never
-    /// drive the single AVSpeechSynthesizer (one shared delegate) concurrently —
-    /// the #52 review residual. See the "Entry serialisation" MARK below.
-    private let entryGate = SpeechEntryGate()
+    /// Serialises EVERY public speak entry — `speak(_:)`, `speak(rawPCM:)` and the
+    /// streaming `speak(stream:)` (the Kokoro/"M1K3 Voice" path) — so two racing
+    /// callers can never drive the single AVSpeechSynthesizer / shared player
+    /// concurrently (the #52 review residual). Internal, not private: the streaming
+    /// entry point lives in EffectfulSpeechProvider+Streaming.swift and routes
+    /// through this same gate. See the "Entry serialisation" MARK below.
+    let entryGate = SpeechEntryGate()
     /// True from the moment a render claims the gate until it unwinds. Covers the
     /// offline-synthesis window that `isSpeaking()` (playback-only) can't see, so a
     /// barge-in during synthesis still interrupts the predecessor.
@@ -177,7 +184,10 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
                 sampleRate: sampleRate
             )
             let chunk = TimedPCMChunk(samples: samples, timeline: timeline)
-            let spoke = await speak(stream: .single(chunk), sampleRate: sampleRate)
+            // renderStream, NOT the gated speak(stream:): we're already inside the
+            // gate (via runRender), so the public gated entry would self-deadlock
+            // waiting on our own predecessor task.
+            let spoke = await renderStream(stream: .single(chunk), sampleRate: sampleRate)
             if !spoke { await plainSpeak(utterance) }
         } catch is CancellationError {
             // A barge-in/stop cancelled the offline render mid-flight (SynthBox's
@@ -208,7 +218,8 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     /// Bump the generation token and interrupt any render already in flight — its
     /// audible playback OR its still-silent synthesis window (which `isSpeaking()`
     /// can't see) — so it unwinds and frees the gate. Returns this entry's token.
-    private func claimEntry() async -> Int {
+    /// Internal so the streaming entry point (in +Streaming.swift) shares it.
+    func claimEntry() async -> Int {
         let generation = await MainActor.run { () -> Int in
             speakGeneration += 1
             return speakGeneration
@@ -229,8 +240,8 @@ public final class EffectfulSpeechProvider: NSObject, SpeechProviderWithWordTimi
     /// Run one render under the gate. Bails if a newer speak() superseded this entry
     /// while it waited (latest-wins). Marks `renderInFlight` for the whole pipeline
     /// so a concurrent barge-in can see — and interrupt — the synthesis window too,
-    /// not just audible playback.
-    private func runRender(_ generation: Int, _ render: () async -> Void) async {
+    /// not just audible playback. Internal so the streaming entry point reuses it.
+    func runRender(_ generation: Int, _ render: () async -> Void) async {
         let proceed = await MainActor.run { () -> Bool in
             guard generation == speakGeneration else { return false }
             renderInFlight = true

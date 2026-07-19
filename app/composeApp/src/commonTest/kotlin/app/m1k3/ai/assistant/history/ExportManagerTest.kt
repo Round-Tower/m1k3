@@ -360,7 +360,7 @@ class ExportManagerTest {
         assertNull(markdown, "Should return null for non-existent conversation")
     }
 
-    // ==================== JSON Import Tests (Future Phase 2.1) ====================
+    // ==================== JSON Import Tests ====================
 
     @Test
     fun `importConversationFromJson restores conversation`() {
@@ -471,5 +471,44 @@ class ExportManagerTest {
 
         // Assert
         assertNull(result, "Should return null for unparseable JSON")
+    }
+
+    @Test
+    fun `importConversationFromJson recomputes counts from messages, not the JSON`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val exportManager = ExportManager(database)
+
+        // A backup whose declared counts LIE about its contents (hand-edited or
+        // corrupted): messageCount/tokenCount claim 999, but there are two messages
+        // totalling 10 tokens.
+        val tampered = """
+            {
+              "title": "Tampered",
+              "projectId": "old_project",
+              "startedAt": 1000,
+              "lastMessageAt": 2000,
+              "messageCount": 999,
+              "tokenCount": 999,
+              "messages": [
+                { "id": "a", "role": "user", "content": "one", "timestamp": 1000, "tokens": 3 },
+                { "id": "b", "role": "assistant", "content": "two", "timestamp": 1500, "tokens": 7 }
+              ]
+            }
+        """.trimIndent()
+
+        // Act
+        val newConvId = exportManager.importConversationFromJson("project_001", tampered)
+
+        // Assert — the stored counts reflect the actual messages, not the JSON's claims.
+        assertNotNull(newConvId, "Should import a valid (if mislabelled) backup")
+        val imported = conversationRepo.getConversationById(newConvId)
+        assertNotNull(imported, "Imported conversation should exist")
+        assertEquals(2, imported.messageCount, "message_count derived from messages, not JSON")
+        assertEquals(10, imported.tokenCount, "token_count summed from messages, not JSON")
+
+        val messages = database.messageQueries.getMessagesByConversation(newConvId).executeAsList()
+        assertEquals(2, messages.size)
     }
 }
