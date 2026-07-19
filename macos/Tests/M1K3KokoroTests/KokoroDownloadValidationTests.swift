@@ -92,10 +92,13 @@ struct KokoroDownloadValidationTests {
 
     @Test("the production floors reject error pages but sit far below the real payloads")
     func productionFloors() {
-        // Model ~326 MB, voices ~28 MB. Floors only need to reject staged HTML
+        // Weights ~327 MB, voices ~28 MB. Floors only need to reject staged HTML
         // error bodies (a few KB) with a huge margin in both directions.
         #expect(KokoroDownloadValidation.modelFloorBytes == 50 * 1024 * 1024)
         #expect(KokoroDownloadValidation.voicesFloorBytes == 1024 * 1024)
+        // config.json is itself only a few KB — this floor just catches a
+        // zero-byte/truncated write; the HTTP status gate is the real defense.
+        #expect(KokoroDownloadValidation.configFloorBytes == 200)
     }
 
     @Test("a download whose awaiting task is already cancelled throws CancellationError, never staging a file")

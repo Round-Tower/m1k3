@@ -2,19 +2,21 @@
 //  KokoroSynthesizer.swift
 //  M1K3Kokoro
 //
-//  The neural synthesis core: text → phoneme tokens (KokoroG2P) → ONNX inference on
-//  the staged kokoro-v1.0.onnx with the per-length voice style (KokoroVoices) → mono
-//  float PCM @ 24 kHz.
+//  The neural synthesis core: text → phoneme tokens (KokoroG2P) → MLX inference on
+//  the staged Kokoro weights (config.json + model.safetensors) with the per-length
+//  voice style (KokoroVoices) → mono float PCM @ 24 kHz.
 //
-//  An actor guards the load lifecycle, but the OS-blocking work — the ~326 MB session
-//  init and the ~220 ms inference — runs on `Task.detached`, NOT on the actor's
+//  An actor guards the load lifecycle, but the OS-blocking work — the weight-load
+//  and the per-chunk forward pass — runs on `Task.detached`, NOT on the actor's
 //  cooperative thread (blocking a cooperative-pool thread for seconds is the classic
 //  Swift-concurrency starvation anti-pattern). Loading is single-flight via a stored
 //  Task: concurrent callers await the same load rather than double-reading the model.
 //
-//  This is the verify-by-launch adapter (no `swift test` for live ORT inference); the
-//  pieces it composes — G2P assembly, the npz style read — are pure + unit-tested, and
-//  Phase-1 proved the ORT path matches the Python reference at 0.999 correlation.
+//  This is the verify-by-launch adapter (no `swift test` for live MLX/Metal
+//  inference — the metallib wall, see `../../CLAUDE.md`); the pieces it composes —
+//  G2P assembly, the npz style read, the token-boundary assembly — are pure +
+//  unit-tested, and Phase-1 proved the (prior ORT) path matches the Python
+//  reference at 0.999 correlation.
 //
 //  Signed: Kev + claude-opus-4-8, 2026-06-09, Confidence 0.6, Prior: Unknown
 //  Review: claude (PR #13) — hoisted blocking load/inference off the cooperative pool
@@ -23,11 +25,25 @@
 //  synthesis (SpeechChunker) with per-chunk word timelines; synthesize() now
 //  concatenates the stream — the silent 510-token truncation is gone.
 //  Confidence 0.8.
+//  Review: Kev + claude-fable-5, 2026-07-18 — the ONNX Runtime backend replaced
+//  with a pure-MLX one (the vendored StyleTTS2/Kokoro port under
+//  `MLX/Vendored/`, MIT, Blaizzy/mlx-audio-swift): `Loaded` now holds a
+//  `KokoroModel` instead of an `ORTEnv`/`ORTSession`; `infer` runs its forward
+//  pass instead of an ORT `run()`. Every caller of this file, KokoroG2P,
+//  KokoroVoices, and the actor/single-flight/Task.detached structure are
+//  UNCHANGED — the vocab ids KokoroG2P emits were verified byte-for-byte
+//  against the new weights' `config.json` vocab map before this port began
+//  (punctuation ids 1–15, space=16, and every inflection-suffix phoneme id
+//  the G2P hardcodes all match). This removes the onnxruntime dependency
+//  entirely (the visionOS unlock — onnxruntime-swift-package-manager had no
+//  xrOS slice). Confidence 0.75 (the pure/testable seams — token assembly,
+//  weight-key sanitize — are red-first pinned; live synthesis is
+//  verify-by-launch/SelfTest, the metallib wall blocks it under `swift test`).
 //
 
 import Foundation
 import M1K3Voice
-import OnnxRuntimeBindings
+import MLX
 
 /// One synthesized piece of an utterance: its audio and the word timing for
 /// exactly that audio. `timeline.text` is the FULL utterance text (ranges
@@ -51,24 +67,33 @@ public actor KokoroSynthesizer {
     /// Kokoro's native output sample rate.
     public static let sampleRate: Double = 24000
 
-    /// Immutable loaded state. `@unchecked Sendable` is sound here: it is built once and
-    /// never mutated, and ORT sessions are thread-safe for concurrent `run()`, so the
-    /// box can be shared across the detached inference tasks without a data race.
+    /// Immutable loaded state. `@unchecked Sendable` is sound here: it is built once
+    /// and never mutated after `init`, and every forward pass is funnelled through
+    /// `inferenceQueue` — a SERIAL queue — so no two inferences ever run
+    /// concurrently against the same `KokoroModel`. The per-chunk loop alone is NOT
+    /// enough: actor reentrancy lets two overlapping `synthesizeStream` calls
+    /// interleave at the awaits, so cross-call serialization must live at the
+    /// resource, not in the loop (PR #58 review catch — the old ORT backend was
+    /// immune because `run()` is documented thread-safe; mlx-swift makes no such
+    /// promise for one model instance).
     private final class Loaded: @unchecked Sendable {
-        let env: ORTEnv
-        let session: ORTSession
+        let model: KokoroModel
         let voices: KokoroVoices
         let g2p: KokoroG2P
+        /// All forward passes run here, serially, off the cooperative pool.
+        let inferenceQueue = DispatchQueue(label: "app.m1k3.kokoro.inference", qos: .userInitiated)
 
-        init(modelURL: URL, voicesURL: URL) throws {
+        init(modelDirectory: URL, voicesURL: URL) throws {
             let fileManager = FileManager.default
-            guard fileManager.fileExists(atPath: modelURL.path),
+            let configURL = modelDirectory.appendingPathComponent("config.json")
+            let weightsURL = modelDirectory.appendingPathComponent("model.safetensors")
+            guard fileManager.fileExists(atPath: configURL.path),
+                  fileManager.fileExists(atPath: weightsURL.path),
                   fileManager.fileExists(atPath: voicesURL.path)
             else {
-                throw SynthError(description: "model files not staged at \(modelURL.deletingLastPathComponent().path)")
+                throw SynthError(description: "model files not staged at \(modelDirectory.path)")
             }
-            env = try ORTEnv(loggingLevel: .warning)
-            session = try ORTSession(env: env, modelPath: modelURL.path, sessionOptions: nil)
+            model = try KokoroModel.fromModelDirectory(modelDirectory)
             voices = try KokoroVoices(contentsOf: voicesURL)
             g2p = try KokoroG2P.bundled()
         }
@@ -144,12 +169,18 @@ public actor KokoroSynthesizer {
             let result = box.g2p.annotatedTokens(chunkText)
             guard !result.tokens.isEmpty else { continue } // all-OOV chunk: no audio to time
             let style = try box.voices.style(voice: voice, tokenCount: result.tokens.count)
-            let modelTokens: [Int64] = [0] + result.tokens.map(Int64.init) + [0]
-            // Inference is OS-blocking; run it off the cooperative pool. Safe to run
-            // concurrently on the shared session (ORT `run()` is thread-safe).
-            let samples = try await Task.detached(priority: .userInitiated) {
-                try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
-            }.value
+            let modelTokens = KokoroMLXInput.modelTokens(result.tokens)
+            // Inference is OS-blocking (Metal dispatch + a synchronous host-side
+            // eval); run it on the box's SERIAL inference queue — off the
+            // cooperative pool AND safe against overlapping synthesizeStream
+            // calls interleaving via actor reentrancy (see Loaded's doc).
+            let samples = try await withCheckedThrowingContinuation { continuation in
+                box.inferenceQueue.async {
+                    continuation.resume(with: Result {
+                        try Self.infer(box, tokens: modelTokens, style: style, speed: speed)
+                    })
+                }
+            }
             let timeline = KokoroWordTiming.timeline(
                 text: text,
                 result: result,
@@ -162,16 +193,16 @@ public actor KokoroSynthesizer {
 
     /// Single-flight load: the first caller creates the detached load Task and stores
     /// it; concurrent callers (actor reentrancy across the `await`) await the SAME task,
-    /// so the ~326 MB model is read exactly once. The stored handle is cleared on
+    /// so the model is read exactly once. The stored handle is cleared on
     /// failure so a later call can retry.
     private func ensureLoaded() async throws -> Loaded {
         if let loaded { return loaded }
         if let loadTask { return try await loadTask.value }
 
-        let modelURL = modelDirectory.appendingPathComponent("kokoro-v1.0.onnx")
+        let directory = modelDirectory
         let voicesURL = modelDirectory.appendingPathComponent("voices-v1.0.bin")
         let task = Task.detached(priority: .userInitiated) {
-            try Loaded(modelURL: modelURL, voicesURL: voicesURL)
+            try Loaded(modelDirectory: directory, voicesURL: voicesURL)
         }
         loadTask = task
         do {
@@ -185,32 +216,11 @@ public actor KokoroSynthesizer {
         }
     }
 
-    /// Pure ORT forward pass on the loaded session. Runs off-actor (see `synthesize`).
-    private static func infer(_ box: Loaded, tokens: [Int64], style: [Float], speed: Float) throws -> [Float] {
-        let tokenData = NSMutableData(bytes: tokens, length: tokens.count * 8)
-        let styleData = NSMutableData(bytes: style, length: style.count * 4)
-        var speedValue = speed
-        let speedData = NSMutableData(bytes: &speedValue, length: 4)
-
-        let tokensTensor = try ORTValue(
-            tensorData: tokenData, elementType: .int64,
-            shape: [1, NSNumber(value: tokens.count)]
-        )
-        let styleTensor = try ORTValue(tensorData: styleData, elementType: .float, shape: [1, 256])
-        let speedTensor = try ORTValue(tensorData: speedData, elementType: .float, shape: [1])
-
-        let outputs = try box.session.run(
-            withInputs: ["tokens": tokensTensor, "style": styleTensor, "speed": speedTensor],
-            outputNames: ["audio"],
-            runOptions: nil
-        )
-        guard let audio = outputs["audio"] else {
-            throw SynthError(description: "model produced no audio output")
-        }
-        let audioData = try audio.tensorData()
-        let count = audioData.length / 4
-        var samples = [Float](repeating: 0, count: count)
-        samples.withUnsafeMutableBytes { audioData.getBytes($0.baseAddress!, length: audioData.length) }
-        return samples
+    /// Pure MLX forward pass on the loaded model. Runs off-actor (see `synthesize`).
+    private static func infer(_ box: Loaded, tokens: [Int32], style: [Float], speed: Float) throws -> [Float] {
+        let inputIds = MLXArray(tokens).reshaped([1, -1])
+        let refS = MLXArray(style).reshaped([1, style.count])
+        let (audio, _) = box.model(inputIds: inputIds, refS: refS, speed: speed)
+        return audio.reshaped([-1]).asArray(Float.self)
     }
 }

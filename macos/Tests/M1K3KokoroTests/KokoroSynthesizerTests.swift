@@ -3,10 +3,28 @@ import Foundation
 import Testing
 
 /// End-to-end integration smoke test for the FULL in-package neural path
-/// (KokoroG2P → KokoroVoices → ONNX inference). Guarded on the staged model files, so
-/// it runs locally (where models/kokoro/ exists) and is skipped in CI. This is the
-/// closest thing to ⌘R without launching the app — it proves the integrated pipeline
-/// produces real speech, not just that the pieces unit-test in isolation.
+/// (KokoroG2P → KokoroVoices → MLX inference). Guarded on BOTH the staged model
+/// files AND `M1K3_MLX_INTEGRATION=1` (the house convention for real-MLX tests,
+/// `../M1K3MLXTests/MLXEmbeddingServiceTests.swift`) — never just file presence.
+///
+/// ⚠️ 2026-07-18 (the ONNX→MLX backend swap): when the guard passes, this suite
+/// does NOT run safely under CLI `swift test` — MLX **aborts the whole process**
+/// ("Failed to load the default metallib", no catchable Swift error) because the
+/// xctest runner isn't an .app bundle (the same known limit
+/// `MLXEmbeddingServiceTests`/`MLXGemmaProviderTests` document, but WORSE here:
+/// those two only fail their own test; this one takes the entire `swift test`
+/// run down with it). That is exactly why the env-var gate was ADDED here
+/// (verified: with the flag off, `swift test --parallel` stayed green at
+/// 1982/288 even with real weights staged at `models/kokoro/`) — file presence
+/// alone used to be enough to run this suite under the old ONNX backend (ORT
+/// has no metallib wall), so a developer's local `models/kokoro/` from before
+/// this port would otherwise silently start crashing every `swift test` run.
+/// Real verification for this suite's assertions was done via a standalone
+/// `swift run` executable with the mlx-swift Cmlx.bundle copied beside the
+/// binary (see KokoroSynthesizer.swift's 2026-07-18 review note and the PR
+/// body) — left staged-file-gated here so it stays the obvious place to look,
+/// and so `M1K3_MLX_INTEGRATION=1 swift test --filter KokoroSynthesizerTests`
+/// (run alone, never in the full suite) is the one-liner that reproduces it.
 struct KokoroSynthesizerTests {
     /// Repo's `models/kokoro`, derived from this file's location so the guarded test
     /// runs on any checkout (…/macos/Tests/M1K3KokoroTests/<thisFile>).
@@ -18,14 +36,16 @@ struct KokoroSynthesizerTests {
     }
 
     private var staged: Bool {
+        guard ProcessInfo.processInfo.environment["M1K3_MLX_INTEGRATION"] == "1" else { return false }
         let fileManager = FileManager.default
-        return fileManager.fileExists(atPath: modelDir.appendingPathComponent("kokoro-v1.0.onnx").path)
+        return fileManager.fileExists(atPath: modelDir.appendingPathComponent("config.json").path)
+            && fileManager.fileExists(atPath: modelDir.appendingPathComponent("model.safetensors").path)
             && fileManager.fileExists(atPath: modelDir.appendingPathComponent("voices-v1.0.bin").path)
     }
 
     @Test("full pipeline synthesizes plausible speech for a sentence")
     func synthesizesPlausibleAudio() async throws {
-        guard staged else { return } // skipped in CI
+        guard staged else { return } // skipped in CI, and skipped locally unless M1K3_MLX_INTEGRATION=1
         let synth = KokoroSynthesizer(modelDirectory: modelDir, voice: "bm_daniel")
         let pcm = try await synth.synthesize(text: "Hello world. This is M1K3 speaking.")
 

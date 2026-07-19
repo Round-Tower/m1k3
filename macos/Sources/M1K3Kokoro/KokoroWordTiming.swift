@@ -2,8 +2,10 @@
 //  KokoroWordTiming.swift
 //  M1K3Kokoro
 //
-//  Proportional word timing for Kokoro audio. The ONNX model emits only the
-//  waveform — no duration tensors — so per-word timing is ESTIMATED: the
+//  Proportional word timing for Kokoro audio. This pipeline only extracts the
+//  waveform from the model (the internal per-phoneme duration predictions the
+//  forward pass computes are discarded, not surfaced) — so per-word timing is
+//  ESTIMATED: the
 //  measured audio duration is distributed over the G2P token stream by weight.
 //  A speakable word's weight span runs from its first own phoneme token to the
 //  next speakable word's first token, so inter-word spaces and trailing

@@ -212,9 +212,12 @@ targets:
         ITSAppUsesNonExemptEncryption: false
 
   # visionOS sibling — same shell, same portable graph, rendered spatially as a
-  # window. The Kokoro visionOS gap (no xrOS ONNX slice) does NOT bite here: voice
-  # isn't wired in the shell yet. The Phase-D spatial flagship (volumetric avatar +
-  # walkable memory constellation) is the differentiated follow.
+  # window. The Kokoro visionOS gap (no xrOS ONNX slice) is RESOLVED as of
+  # 2026-07-18 — the ONNX Runtime backend was replaced with a pure-MLX one
+  # (M1K3Kokoro now links MLX/MLXNN/MLXFFT/MLXFast, which already build for
+  # visionOS 26), so M1K3 Voice has no per-platform gap once it's wired into
+  # this shell. The Phase-D spatial flagship (volumetric avatar + walkable
+  # memory constellation) is the differentiated follow.
   M1K3visionOS:
     type: application
     platform: visionOS

@@ -34,6 +34,15 @@
 //  cancellation handler on the download await (all pinned in
 //  KokoroDownloadValidationTests; the swallowed-preload-failure fallback
 //  design is deliberately untouched).
+//  Review: Kev + claude-fable-5, 2026-07-18 — the ONNX backend is gone
+//  (KokoroSynthesizer.swift now runs pure MLX). Staging swaps the single
+//  ~326 MB kokoro-v1.0.onnx for TWO files from `mlx-community/Kokoro-82M-bf16`:
+//  `config.json` (tiny) + the weights (staged locally as `model.safetensors`,
+//  matching what the vendored MLX loader expects — the HF repo's own
+//  filename is `kokoro-v1_0.safetensors`, renamed on download to avoid yet
+//  another hyphen/underscore footgun in this file). `voices-v1.0.bin` is
+//  UNCHANGED — M1K3's own KokoroVoices npz reader stays, not the new repo's
+//  per-voice `.safetensors` files.
 
 import Foundation
 import M1K3Inference
@@ -46,10 +55,16 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
 
     private static let log = M1K3Log.logger(.voice)
 
-    /// Public release of the Kokoro v1.0 ONNX weights (matches the filenames M1K3
-    /// already ships under `models/kokoro/`). The spike loads these.
+    /// The MLX Kokoro checkpoint (mlx-community/Kokoro-82M-bf16 — the model
+    /// the passed synthesis spike validated bm_daniel against). `configURL`'s
+    /// destination filename and `modelURL`'s BOTH stay as the HF repo names
+    /// them; the weights are renamed on download to `model.safetensors` (see
+    /// `prepare(progress:)`) — the vendored loader's expected name.
+    private static let configURL = URL(
+        string: "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/config.json"
+    )!
     private static let modelURL = URL(
-        string: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+        string: "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/kokoro-v1_0.safetensors"
     )!
     private static let voicesURL = URL(
         string: "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
@@ -84,11 +99,12 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
         lock.withLock { _ready }
     }
 
-    /// Whether both weight files are already on disk — lets the app restore the
-    /// M1K3 Voice tier on launch without kicking a fresh download.
+    /// Whether all three staged files are already on disk — lets the app restore
+    /// the M1K3 Voice tier on launch without kicking a fresh download.
     public var isModelStaged: Bool {
         let fileManager = FileManager.default
-        return fileManager.fileExists(atPath: modelDirectory.appendingPathComponent("kokoro-v1.0.onnx").path)
+        return fileManager.fileExists(atPath: modelDirectory.appendingPathComponent("config.json").path)
+            && fileManager.fileExists(atPath: modelDirectory.appendingPathComponent("model.safetensors").path)
             && fileManager.fileExists(atPath: modelDirectory.appendingPathComponent("voices-v1.0.bin").path)
     }
 
@@ -128,8 +144,9 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
 
     // MARK: - Synthesis
 
-    /// Neural path: text → sentence chunks → G2P → ONNX (kokoro-v1.0.onnx) → mono
-    /// PCM @ 24 kHz streamed to the renderer chunk-by-chunk, each with its word
+    /// Neural path: text → sentence chunks → G2P → MLX (config.json +
+    /// model.safetensors) → mono PCM @ 24 kHz streamed to the renderer
+    /// chunk-by-chunk, each with its word
     /// timeline — playback starts after the first sentence, long answers are never
     /// truncated, and the karaoke highlight tracks the audio. Falls back to the
     /// effect-processed Apple voice when nothing was spoken at all (model not
@@ -160,7 +177,7 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
     // MARK: - ModelPreloading
 
     /// Stage the Kokoro weights into the app container, reporting real download
-    /// progress. Idempotent — returns instantly once both files are present.
+    /// progress. Idempotent — returns instantly once all three files are present.
     public func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
         // Already staged this session — nothing to do. (The app layer also guards
         // concurrent calls via `isPreparingVoice`; this is the idempotent fast path.)
@@ -171,14 +188,20 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
 
-        let modelDest = modelDirectory.appendingPathComponent("kokoro-v1.0.onnx")
+        let configDest = modelDirectory.appendingPathComponent("config.json")
+        let modelDest = modelDirectory.appendingPathComponent("model.safetensors")
         let voicesDest = modelDirectory.appendingPathComponent("voices-v1.0.bin")
+
+        // Reclaim the retired ONNX model (~326 MB) from installs that predate the
+        // MLX backend — nothing reads it anymore (PR #58 review suggestion).
+        try? fileManager.removeItem(at: modelDirectory.appendingPathComponent("kokoro-v1.0.onnx"))
 
         // Self-heal a poisoned stage: a pre-status-check download could stage an
         // HTTP error body as weights, and file-existence alone would then trust
         // it forever (Apple-voice fallback with no retry path). An implausibly
         // small file is deleted here so the download blocks below re-fetch it.
         for (dest, floor) in [
+            (configDest, KokoroDownloadValidation.configFloorBytes),
             (modelDest, KokoroDownloadValidation.modelFloorBytes),
             (voicesDest, KokoroDownloadValidation.voicesFloorBytes),
         ] where fileManager.fileExists(atPath: dest.path)
@@ -190,7 +213,8 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
             try? fileManager.removeItem(at: dest)
         }
 
-        if fileManager.fileExists(atPath: modelDest.path),
+        if fileManager.fileExists(atPath: configDest.path),
+           fileManager.fileExists(atPath: modelDest.path),
            fileManager.fileExists(atPath: voicesDest.path)
         {
             lock.withLock { _ready = true }
@@ -204,19 +228,26 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
             return
         }
 
-        // The model is ~326 MB, voices ~28 MB — weight the combined bar by size so
-        // it advances proportionally rather than jumping at the file boundary.
-        let modelWeight = 0.92
+        // The weights are ~327 MB, voices ~28 MB, config.json a few KB — weight
+        // the combined bar by size so it advances proportionally rather than
+        // jumping at a file boundary.
+        let configWeight = 0.01
+        let modelWeight = 0.91
         let voicesWeight = 0.08
 
+        if !fileManager.fileExists(atPath: configDest.path) {
+            try await FileDownloader.download(Self.configURL, to: configDest) { fraction in
+                progress(fraction * configWeight)
+            }
+        }
         if !fileManager.fileExists(atPath: modelDest.path) {
             try await FileDownloader.download(Self.modelURL, to: modelDest) { fraction in
-                progress(fraction * modelWeight)
+                progress(configWeight + fraction * modelWeight)
             }
         }
         if !fileManager.fileExists(atPath: voicesDest.path) {
             try await FileDownloader.download(Self.voicesURL, to: voicesDest) { fraction in
-                progress(modelWeight + fraction * voicesWeight)
+                progress(configWeight + modelWeight + fraction * voicesWeight)
             }
         }
 
@@ -250,10 +281,16 @@ public final class KokoroSpeechProvider: SpeechProviderWithWordTiming, ModelPrel
 /// file-existence would trust it forever. Status validation stops future bad
 /// stages; the plausibility floor also self-heals installs already poisoned.
 enum KokoroDownloadValidation {
-    /// Deliberately far below the real payloads (~326 MB model, ~28 MB voices):
+    /// Deliberately far below the real payloads (~327 MB weights, ~28 MB voices):
     /// the floors only need to reject staged HTML error pages (a few KB).
     static let modelFloorBytes: Int64 = 50 * 1024 * 1024
     static let voicesFloorBytes: Int64 = 1024 * 1024
+    /// config.json itself is only a few KB, so this floor can't lean on a huge
+    /// size margin the way the other two do — it exists purely to catch a
+    /// zero-byte/truncated write. The HTTP status-code gate (`isAcceptable`,
+    /// checked by the download delegate before ANY file is staged) is the
+    /// real defense for config.json; this is defense-in-depth only.
+    static let configFloorBytes: Int64 = 200
 
     /// HTTP responses must be 2xx; anything else (file://, nil) is not this
     /// check's concern and passes through.
