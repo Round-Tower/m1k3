@@ -67,6 +67,23 @@ struct AttachmentStoreTests {
         #expect(first.url != second.url)
     }
 
+    @Test("discard deletes the stored copies; a missing file is a quiet no-op")
+    func discardDeletesCopies() throws {
+        let temp = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let original = temp.appendingPathComponent("photo.png")
+        try Data([0x89]).write(to: original)
+        let store = AttachmentStore(directory: temp.appendingPathComponent("attachments"))
+        let kept = try store.store(originalURL: original)
+        let removed = try store.store(originalURL: original)
+
+        AttachmentStore.discard([removed])
+        #expect(!FileManager.default.fileExists(atPath: removed.url.path))
+        #expect(FileManager.default.fileExists(atPath: kept.url.path))
+        // Discarding again (file already gone) must not throw or crash.
+        AttachmentStore.discard([removed])
+    }
+
     @Test("a missing source throws rather than fabricating an attachment")
     func missingSourceThrows() throws {
         let temp = try makeTempDirectory()

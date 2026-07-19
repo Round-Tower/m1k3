@@ -388,6 +388,9 @@ struct ContentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         Button {
                             pendingAttachments.removeAll { $0 == attachment }
+                            // The staged copy is ours — removing the chip
+                            // removes the file (privacy: nothing lingers).
+                            AttachmentStore.discard([attachment])
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .symbolRenderingMode(.palette)
@@ -404,7 +407,10 @@ struct ContentView: View {
         .frame(maxWidth: Self.chatContentMaxWidth)
         .frame(maxWidth: .infinity)
         .onChange(of: env.selectedBrain) {
-            if !env.selectedBrain.supportsImageInput { pendingAttachments = [] }
+            if !env.selectedBrain.supportsImageInput {
+                AttachmentStore.discard(pendingAttachments)
+                pendingAttachments = []
+            }
         }
     }
 

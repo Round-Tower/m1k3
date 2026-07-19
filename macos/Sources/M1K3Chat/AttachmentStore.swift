@@ -39,4 +39,17 @@ public struct AttachmentStore: Sendable {
         try FileManager.default.copyItem(at: originalURL, to: destination)
         return ImageAttachment(url: destination)
     }
+
+    /// Delete stored copies. We OWN these files (they are our container-side
+    /// copies, never the user's originals), so removal is safe by
+    /// construction; a missing file is a quiet no-op (idempotent — a
+    /// double-discard or an already-swept orphan must never throw). Called
+    /// when a pending attachment is removed before send, and when a
+    /// conversation is deleted — the privacy stance says a deleted photo
+    /// leaves the container, not just the transcript. (PR #62 round-2 fold.)
+    public static func discard(_ attachments: [ImageAttachment]) {
+        for attachment in attachments {
+            try? FileManager.default.removeItem(at: attachment.url)
+        }
+    }
 }

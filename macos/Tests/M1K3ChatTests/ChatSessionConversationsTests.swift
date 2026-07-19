@@ -10,6 +10,7 @@
 
 import Foundation
 @testable import M1K3Chat
+import M1K3Inference
 import M1K3Knowledge
 import Testing
 
@@ -328,6 +329,32 @@ struct ChatSessionConversationsTests {
         #expect(session.activeConversationID == liveID)
         #expect(!session.messages.isEmpty)
         #expect(session.conversationSummaries().map(\.id) == [liveID])
+    }
+
+    @Test("deleting a conversation deletes its attachment files — a removed photo is GONE from disk")
+    func deleteRemovesAttachmentFiles() async throws {
+        // Privacy stance: delete the conversation, and any sensitive photo it
+        // carried leaves the container too (PR #62 round-2 review fold).
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attach-delete-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("secret.png")
+        try Data([0x89]).write(to: file)
+
+        let store = InMemoryHistoryStore()
+        let session = ChatSession(responder: EchoResponder(), history: store)
+        await session.send("hello")
+        let other = UUID()
+        var seeded = completedMessages([("look at this", "nice photo")])
+        seeded[0].attachments = [ImageAttachment(url: file)]
+        store.seed(id: other, title: nil, updatedAt: Date(timeIntervalSince1970: 50),
+                   messages: seeded)
+
+        session.deleteConversation(other)
+
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(session.conversationSummaries().map(\.id) == [session.activeConversationID])
     }
 
     @Test("deleting the ACTIVE conversation starts a fresh empty one")

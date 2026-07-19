@@ -48,9 +48,19 @@ public extension ChatSession {
     /// Delete a conversation. Deleting the ACTIVE one starts a fresh empty
     /// session (mirrors delete-then-new); a pending title for the deleted row
     /// no-ops at the store (setTitle ignores unknown ids).
+    ///
+    /// Attachment files go WITH the conversation: the transcript row holds the
+    /// only references to the container-side image copies, so they're
+    /// collected BEFORE the row is deleted and discarded after — a deleted
+    /// sensitive photo leaves the disk, not just the drawer.
     func deleteConversation(_ id: UUID) {
         guard !isResponding, let history else { return }
+        let doomed = id == activeConversationID
+            ? messages
+            : ((try? history.loadMessages(id: id)) ?? nil) ?? []
+        let attachments = doomed.compactMap(\.attachments).flatMap(\.self)
         _ = try? history.delete(id: id)
+        AttachmentStore.discard(attachments)
         if id == activeConversationID {
             beginConversation(id: UUID(), messages: [], title: nil)
         } else {
