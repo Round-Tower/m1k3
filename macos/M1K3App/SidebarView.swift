@@ -43,6 +43,21 @@ struct SidebarView: View {
                     .tag(SidebarSelection.memories)
                 Label("Calls", systemImage: "phone.bubble")
                     .tag(SidebarSelection.calls)
+                // Not .tag()'d — these open their own window/scene rather
+                // than driving `selection`, so they act as plain buttons
+                // inside the list without disturbing row-selection state.
+                // The trailing Review panel is deliberately NOT here: it's
+                // a resizable inspector column beside the chat, not a place
+                // you "navigate to" — a sidebar row for it would just be a
+                // second, confusing way to trigger the same toolbar toggle.
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                Button {
+                    openWindow(id: M1K3App.agentLogWindowID)
+                } label: {
+                    Label("Agent Log", systemImage: "list.bullet.rectangle")
+                }
             }
 
             Section("Conversations") {
@@ -54,25 +69,6 @@ struct SidebarView: View {
                     ForEach(summaries) { summary in
                         conversationRow(for: summary)
                     }
-                }
-            }
-
-            // Quick-launch rows for the app's two OTHER windows — not
-            // .tag()'d (they open their own window/scene rather than
-            // driving `selection`, so they act as plain buttons inside the
-            // list without disturbing row-selection state). The trailing
-            // Review panel is deliberately NOT here: it's a resizable
-            // inspector column beside the chat, not a place you "navigate
-            // to" — a sidebar row for it would just be a second, confusing
-            // way to trigger the same toolbar toggle.
-            Section {
-                SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                Button {
-                    openWindow(id: M1K3App.agentLogWindowID)
-                } label: {
-                    Label("Agent Log", systemImage: "bubble.left.and.bubble.right")
                 }
             }
         }

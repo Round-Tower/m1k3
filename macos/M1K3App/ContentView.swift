@@ -30,7 +30,6 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var draft = ""
@@ -804,24 +803,17 @@ struct ContentView: View {
             : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
     }
 
-    /// Reachable from every sidebar destination, not just Chat.
+    /// Reachable from every sidebar destination, not just Chat. Settings and
+    /// Agent Log moved to the sidebar's Workspace section (Kev's call — they
+    /// were crowding the toolbar into its ">>" overflow); the Review panel
+    /// stays toolbar-only since it isn't a sidebar destination (see
+    /// SidebarView's own comment on why).
     private var alwaysToolbarItems: some View {
-        Group {
-            Button { openWindow(id: M1K3App.agentLogWindowID) } label: {
-                Label("Agent Log", systemImage: "bubble.left.and.bubble.right")
-            }
-            .help("Review MCP tool calls captured from connected agents (opt-in)")
-
-            Button { env.review.isPresented.toggle() } label: {
-                Label("Review panel", systemImage: "sidebar.right")
-            }
-            .help("Open a side panel to review links and files (⌥⌘R)")
-            .keyboardShortcut("r", modifiers: [.command, .option])
-
-            SettingsLink {
-                Label("Settings", systemImage: "gearshape")
-            }
+        Button { env.review.isPresented.toggle() } label: {
+            Label("Review panel", systemImage: "sidebar.right")
         }
+        .help("Open a side panel to review links and files (⌥⌘R)")
+        .keyboardShortcut("r", modifiers: [.command, .option])
     }
 
     /// Brain hot-swap + the "currently using X" indicator. This intentionally
@@ -874,10 +866,10 @@ struct ContentView: View {
 
     /// The chat-specific actions — History/Documents/Memories/Calls moved to
     /// the sidebar (they're destinations now, not toolbar-button-behind-a-
-    /// sheet); Agent Log/Review panel/Settings moved to `alwaysToolbarItems`
-    /// (reachable from any destination). What's left is genuinely chat-only:
-    /// which brain answers, how the avatar shows, importing a document, and
-    /// starting/stopping a call recording.
+    /// sheet), and Settings/Agent Log now live there too (the Workspace
+    /// section). Only the Review panel stays in `alwaysToolbarItems`. What's
+    /// left here is genuinely chat-only: which brain answers, how the avatar
+    /// shows, importing a document, and starting/stopping a call recording.
     private var chatToolbarItems: some View {
         Group {
             brainSwitcher
