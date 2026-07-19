@@ -555,18 +555,9 @@ struct ContentView: View {
                     .accessibilityLabel("Attach image")
                 }
 
-                Button { env.chat.startNewConversation() } label: {
-                    Image(systemName: "square.and.pencil")
-                        .imageScale(.large)
-                        .fontWeight(.semibold)
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
-                .help("Start a fresh conversation — this one stays in Conversations")
-                .accessibilityLabel("New chat")
-
+                // New chat lives in the sidebar now (its toolbar pencil +
+                // ⌘N) — a second identical pencil here was pure duplication
+                // once the sidebar owned conversation lifecycle.
                 if env.isListening {
                     // The bail-out: discard the dictation WITHOUT sending. The
                     // mic stays tap-to-send (muscle memory); this is the exit

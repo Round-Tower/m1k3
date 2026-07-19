@@ -2,7 +2,7 @@
 //  SidebarView.swift
 //  M1K3App
 //
-//  The leading NavigationSplitView column: Chat, a Workspace section
+//  The leading NavigationSplitView column: Chat, the workspace destinations
 //  (Documents/Memories/Calls — echoes the iOS shell's TabSection("Workspace")
 //  grouping), and a Conversations section that IS the old HistoryView's
 //  content, migrated verbatim (title/relative-date rows, active checkmark,
@@ -12,6 +12,11 @@
 //  just what a sidebar's own row list already is on this platform (Mail's
 //  mailbox list, Notes' folder list) — a 5th parallel destination would have
 //  been redundant with it.
+//
+//  Destinations (which stay selected + swap the detail pane) live in the
+//  scrolling List; app-ACTIONS that open their own window (Settings, Agent
+//  Log) live in a pinned bottom `footer` so they never read as peers of the
+//  destinations and never scroll off below a long conversation list.
 //
 //  No .glassBackdrop() here — .listStyle(.sidebar) already paints macOS's own
 //  vibrant sidebar material; stacking our own NSVisualEffectView underneath
@@ -38,6 +43,11 @@ struct SidebarView: View {
 
             // No header text (Kev's call) — the row icons/labels carry
             // enough meaning on their own without a "Workspace" caption.
+            // These are true navigation DESTINATIONS (they stay selected +
+            // swap the detail pane); the app-action items (Settings/Agent
+            // Log — they open a separate window and never "stay selected")
+            // live in the pinned footer below, so the two kinds don't read
+            // as peers.
             Section {
                 Label("Documents", systemImage: "books.vertical")
                     .tag(SidebarSelection.documents)
@@ -45,27 +55,6 @@ struct SidebarView: View {
                     .tag(SidebarSelection.memories)
                 Label("Calls", systemImage: "phone.bubble")
                     .tag(SidebarSelection.calls)
-                // Not .tag()'d — these open their own window/scene rather
-                // than driving `selection`, so they act as plain buttons
-                // inside the list without disturbing row-selection state.
-                // .buttonStyle(.plain) strips the default bordered/pill
-                // chrome List gives Button/SettingsLink content, so they
-                // read as the SAME flat row style as the tagged Labels
-                // above (Kev's call) rather than looking like a button.
-                // The trailing Review panel is deliberately NOT here: it's
-                // a resizable inspector column beside the chat, not a place
-                // you "navigate to" — a sidebar row for it would just be a
-                // second, confusing way to trigger the same toolbar toggle.
-                SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .buttonStyle(.plain)
-                Button {
-                    openWindow(id: M1K3App.agentLogWindowID)
-                } label: {
-                    Label("Agent Log", systemImage: "list.bullet.rectangle")
-                }
-                .buttonStyle(.plain)
             }
 
             Section("Conversations") {
@@ -89,6 +78,7 @@ struct SidebarView: View {
         // inspector's fix doesn't transfer — that column has no built-in
         // material). Leaving safe-area respected keeps "Chat" clear of the
         // lights; the .sidebar list style already reads correctly to the edge.
+        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button {
@@ -98,9 +88,48 @@ struct SidebarView: View {
                     Label("New chat", systemImage: "square.and.pencil")
                 }
                 .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
-                .help("Start a fresh conversation — this one stays in Conversations")
+                // ⌘N always reaches New chat even when the sidebar is
+                // collapsed (narrow window) or its toolbar pencil is off-
+                // screen — the input-bar pencil used to cover that, now
+                // retired as a duplicate.
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Start a fresh conversation — this one stays in Conversations (⌘N)")
             }
         }
+    }
+
+    /// App-action items pinned to the sidebar's bottom edge — Settings and
+    /// Agent Log open their OWN window/scene (they never "stay selected"
+    /// like a destination), so they don't belong in the scrolling
+    /// destination list where they'd (a) read as peers of Documents/
+    /// Memories/Calls and (b) get pushed off-screen below a long
+    /// conversation list (Kev's actual complaint). A pinned footer keeps
+    /// them one glance away, always. Review panel stays toolbar-only — it's
+    /// a resizable inspector beside the chat, not something you launch.
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Divider()
+            VStack(alignment: .leading, spacing: 2) {
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .help("M1K3 settings (⌘,)")
+                Button {
+                    openWindow(id: M1K3App.agentLogWindowID)
+                } label: {
+                    Label("Agent Log", systemImage: "list.bullet.rectangle")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .help("Review MCP tool calls captured from connected agents (opt-in)")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .background(.bar)
     }
 
     private func conversationRow(for summary: ConversationSummary) -> some View {
