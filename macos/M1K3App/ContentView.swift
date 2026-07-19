@@ -69,40 +69,12 @@ struct ContentView: View {
         VStack(spacing: 0) {
             avatarPanel
             transcript
-            // The upgrade encore — after the first whoa, never before or during
-            // (BrainUpgradePolicy gates the offer to between-turns moments).
-            if showsBrainUpgradeNudge, !env.isVoiceModeActive, let target = env.brainUpgradeTarget {
-                BrainUpgradeNudgeCard(
-                    target: target,
-                    currentBrainName: env.selectedBrain.displayName,
-                    isStagedSwitch: env.brainUpgrade == .staged(consented: false),
-                    isReOffer: env.brainUpgradeIsReOffer,
-                    onAccept: { env.acceptBrainUpgrade() },
-                    onDismiss: { env.dismissBrainUpgrade() }
-                )
-                .frame(maxWidth: Self.chatContentMaxWidth)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            // The intro invitation shares the ONE bottom earned-offer slot —
-            // the brain nudge outranks it (coordinator guarantees they never
-            // both raise; this else-if is the belt to that suspender).
-            else if env.introductionOffered, !env.isVoiceModeActive {
-                IntroductionOfferCard(
-                    onAccept: {
-                        env.acceptIntroductionOffer()
-                        inputFocused = true
-                    },
-                    onDismiss: { env.dismissIntroductionOffer() }
-                )
-                .frame(maxWidth: Self.chatContentMaxWidth)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            // The input bar hides while voice owns the conversation — the dock
-            // below IS the bottom chrome then, so there's no typed-vs-spoken clash.
-            if !env.isVoiceModeActive {
-                inputBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+                // Bottom chrome rides a safeAreaInset (not a VStack sibling) so
+                // the transcript SCROLLS UNDER the bar and its material blurs
+                // real content — the macOS bar idiom, matching the toolbar's
+                // material above. followLatest's .bottom anchor automatically
+                // lands above the inset.
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
         }
         .animation(.spring(duration: 0.35), value: showsBrainUpgradeNudge)
         .animation(.spring(duration: 0.35), value: avatarDisplay)
@@ -176,6 +148,30 @@ struct ContentView: View {
         } isTargeted: { isDropTargeted = $0 }
         .overlay { if isDropTargeted { DropHintView() } }
         .toolbar { toolbarContent }
+        // Faded top chrome, mirroring the bottom bar: a gradient-masked
+        // material scrim over the titlebar region that dissolves downward —
+        // no hard system band (toolbarBackground can't fade; this overlay
+        // is the counterpart to bottomChrome's masked material). Hidden in
+        // voice mode so the full-window hero keeps its clean edges.
+        .overlay(alignment: .top) {
+            if !env.isVoiceModeActive {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .frame(height: 96)
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0.0),
+                                .init(color: .black.opacity(0.6), location: 0.55),
+                                .init(color: .clear, location: 1.0),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    }
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+            }
+        }
         .sheet(isPresented: $showDocuments) {
             DocumentsView().environment(env)
         }
@@ -362,6 +358,68 @@ struct ContentView: View {
 
     // MARK: - Input
 
+    /// The bottom bar band: earned-offer cards + the input row on one shared
+    /// material, so the transcript blurs through as it scrolls beneath (the
+    /// counterpart to the toolbar's material). Empty in voice mode — zero
+    /// height, no band.
+    private var bottomChrome: some View {
+        VStack(spacing: 0) {
+            // The upgrade encore — after the first whoa, never before or during
+            // (BrainUpgradePolicy gates the offer to between-turns moments).
+            if showsBrainUpgradeNudge, !env.isVoiceModeActive, let target = env.brainUpgradeTarget {
+                BrainUpgradeNudgeCard(
+                    target: target,
+                    currentBrainName: env.selectedBrain.displayName,
+                    isStagedSwitch: env.brainUpgrade == .staged(consented: false),
+                    isReOffer: env.brainUpgradeIsReOffer,
+                    onAccept: { env.acceptBrainUpgrade() },
+                    onDismiss: { env.dismissBrainUpgrade() }
+                )
+                .frame(maxWidth: Self.chatContentMaxWidth)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            // The intro invitation shares the ONE bottom earned-offer slot —
+            // the brain nudge outranks it (coordinator guarantees they never
+            // both raise; this else-if is the belt to that suspender).
+            else if env.introductionOffered, !env.isVoiceModeActive {
+                IntroductionOfferCard(
+                    onAccept: {
+                        env.acceptIntroductionOffer()
+                        inputFocused = true
+                    },
+                    onDismiss: { env.dismissIntroductionOffer() }
+                )
+                .frame(maxWidth: Self.chatContentMaxWidth)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            // The input bar hides while voice owns the conversation — the dock
+            // below IS the bottom chrome then, so there's no typed-vs-spoken clash.
+            if !env.isVoiceModeActive {
+                inputBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .background {
+            // Faded bar: the material dissolves upward through a gradient mask
+            // (with a little bleed above the band) instead of cutting a hard
+            // edge — messages melt into the blur as they scroll beneath.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .padding(.top, -28)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black.opacity(0.6), location: 0.25),
+                            .init(color: .black, location: 0.5),
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                }
+                .allowsHitTesting(false)
+        }
+    }
+
     private var inputBar: some View {
         VStack(spacing: 8) {
             if !pendingAttachments.isEmpty {
@@ -445,7 +503,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.glass)
                     .buttonBorderShape(.circle)
-                    .disabled(env.chat.isResponding)
+                    .disabled(env.chat.isResponding || !env.isReady)
                     .help("Attach an image — Big can see it")
                     .accessibilityLabel("Attach image")
                 }

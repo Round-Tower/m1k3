@@ -390,6 +390,37 @@ struct ChatSessionConversationsTests {
         #expect(session.conversationSummaries().contains { $0.id == other })
     }
 
+    @Test("ACTIVE-conversation delete sweeps the files even when the row delete fails — the deliberate asymmetry")
+    func activeDeleteSweepsFilesEvenIfRowDeleteFails() throws {
+        // The inverse of failedDeleteKeepsAttachmentFiles: for the ACTIVE
+        // conversation the in-memory transcript resets regardless, so the
+        // photo being GONE wins over drawer-thumbnail integrity. Pinned so a
+        // future "fix" of the asymmetry fails here and reads the rationale.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attach-active-delete-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("secret.png")
+        try Data([0x89]).write(to: file)
+
+        let store = InMemoryHistoryStore()
+        // Seeded PRE-init → restored as the ACTIVE conversation (the fixture
+        // convention: post-init seeds are the non-active ones).
+        let active = UUID()
+        var seeded = completedMessages([("look at this", "nice photo")])
+        seeded[0].attachments = [ImageAttachment(url: file)]
+        store.seed(id: active, title: nil, updatedAt: Date(timeIntervalSince1970: 100),
+                   messages: seeded)
+        let session = ChatSession(responder: EchoResponder(), history: store)
+        #expect(session.activeConversationID == active)
+        store.failsDeletes = true
+
+        session.deleteConversation(active)
+
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(session.messages.isEmpty)
+    }
+
     @Test("deleting the ACTIVE conversation starts a fresh empty one")
     func deleteActive() async {
         let store = InMemoryHistoryStore()

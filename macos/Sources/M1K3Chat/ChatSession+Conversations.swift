@@ -57,7 +57,7 @@ public extension ChatSession {
         guard !isResponding, let history else { return }
         let doomed = id == activeConversationID
             ? messages
-            : ((try? history.loadMessages(id: id)) ?? nil) ?? []
+            : (try? history.loadMessages(id: id)) ?? []
         let attachments = doomed.compactMap(\.attachments).flatMap(\.self)
         let rowDeleted = (try? history.delete(id: id)) ?? false
         if id == activeConversationID {
@@ -65,6 +65,11 @@ public extension ChatSession {
             // so the files go with it either way — a surviving orphan row
             // will list with broken thumbnails, which the drawer's next
             // delete attempt cleans up; the photo being GONE wins here.
+            // DELIBERATELY asymmetric with the non-active branch below (which
+            // gates discard on rowDeleted): don't "fix" the difference — the
+            // active/inactive branches optimise for opposite privacy failures.
+            // Both directions are test-pinned (activeDeleteSweepsFilesEvenIf
+            // RowDeleteFails / failedDeleteKeepsAttachmentFiles).
             AttachmentStore.discard(attachments)
             beginConversation(id: UUID(), messages: [], title: nil)
         } else {
