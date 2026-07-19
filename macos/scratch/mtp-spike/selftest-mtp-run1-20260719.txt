@@ -1,0 +1,25 @@
+=== M1K3 SELF-TEST (inside .app bundle) ===
+✓ store+ingest: 1 chunk, 1 embedding(s)
+• AFM available: true
+✓ AFM RAG answer: The hydraulic seal on the conveyor failed under load.
+
+FOLLOWUPS:
+[Plant Notes §3.2 Seals]
+  grounded in 1 source(s)
+• loading MLX Qwen3-Embedding (downloads on first use)…
+✓ MLX Qwen3-Embedding embed: dim=512 ‖v‖=1.000
+embedwarm: cold=4476ms warm=13ms delta=4463ms (delta = first-turn TTFT tax without the launch warm)
+• loading MLX generation model mlx-community/Llama-3.2-1B-Instruct-4bit…
+✓ MLX generate: A hydraulic seal is the part of a system that prevents liquids from passing through, typically used in applications where high pressure and viscosity are involved.
+• mtp spike: target mlx-community/gemma-4-12B-it-4bit + drafter mlx-community/gemma-4-12B-it-qat-assistant-4bit via MLXVLM…
+✓ mtp short-no-wrap: prompt 25tok · baseline 20.9tok/s (23tok) vs mtp 24.5tok/s (23tok) = 1.17x · accept n/a (0/0) · exact-match · passthrough: main model did not emit drafter state
+  mtp short-no-wrap baseline: A hydraulic seal is a component designed to contain fluids or gases within a hydraulic system by preventing leaks and maintaining pressure.
+  mtp short-no-wrap mtp:      A hydraulic seal is a component designed to contain fluids or gases within a hydraulic system by preventing leaks and maintaining pressure.
+✓ mtp medium-wraps-mid-decode: prompt 588tok · baseline 29.0tok/s (534tok) vs mtp 23.1tok/s (534tok) = 0.80x · accept n/a (0/0) · exact-match · passthrough: main model did not emit drafter state
+  mtp medium-wraps-mid-decode baseline: To parse the harbor logs and summarize a day’s traffic effectively, I would implement a structured data processing pipeline that moves from raw text ingestion t
+  mtp medium-wraps-mid-decode mtp:      To parse the harbor logs and summarize a day’s traffic effectively, I would implement a structured data processing pipeline that moves from raw text ingestion t
+✓ mtp long-wrapped-at-prefill: prompt 2072tok · baseline 31.0tok/s (21tok) vs mtp 4.0tok/s (21tok) = 0.13x · accept n/a (0/0) · exact-match · passthrough: main model did not emit drafter state
+  mtp long-wrapped-at-prefill baseline: I state plainly when I do not know the answer. I base my responses only on the provided documents.
+  mtp long-wrapped-at-prefill mtp:      I state plainly when I do not know the answer. I base my responses only on the provided documents.
+MTP spike (VLM-loaded target + drafter resident) MB: active=6430 cache=130 peak=7789 footprint=7077
+=== END SELF-TEST ===
