@@ -370,6 +370,7 @@ class ExportManagerTest {
         val exportManager = ExportManager(database)
 
         val projectId = "project_001"
+        database.seedProject(projectId)
         val convId = conversationRepo.createConversation(projectId, "Test")
 
         database.messageQueries.insertMessage(
@@ -418,6 +419,7 @@ class ExportManagerTest {
         val exportManager = ExportManager(database)
 
         val projectId = "project_001"
+        database.seedProject("project_002") // the import target must exist
         val convId = conversationRepo.createConversation(projectId, "Round Trip")
 
         val now = Clock.System.now().toEpochMilliseconds()
@@ -480,6 +482,8 @@ class ExportManagerTest {
         val conversationRepo = ConversationRepository(database)
         val exportManager = ExportManager(database)
 
+        database.seedProject("project_001")
+
         // A backup whose declared counts LIE about its contents (hand-edited or
         // corrupted): messageCount/tokenCount claim 999, but there are two messages
         // totalling 10 tokens.
@@ -511,4 +515,51 @@ class ExportManagerTest {
         val messages = database.messageQueries.getMessagesByConversation(newConvId).executeAsList()
         assertEquals(2, messages.size)
     }
+
+    @Test
+    fun `importConversationFromJson returns null for an unknown target project`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val exportManager = ExportManager(database)
+
+        // Syntactically valid export, but the target project was never created.
+        val json = """
+            {
+              "title": "Orphan",
+              "projectId": "old_project",
+              "startedAt": 1,
+              "lastMessageAt": 2,
+              "messageCount": 0,
+              "tokenCount": 0,
+              "messages": []
+            }
+        """.trimIndent()
+
+        // Act
+        val result = exportManager.importConversationFromJson("does_not_exist", json)
+
+        // Assert — a bad restore target is rejected up front, like malformed JSON.
+        assertNull(result, "Unknown target project should be rejected, not silently orphaned")
+        assertEquals(
+            0,
+            database.conversationMetadataQueries.getConversationsByProject("does_not_exist").executeAsList().size,
+            "Nothing should have been written for the unknown project"
+        )
+    }
+}
+
+/** Insert a minimal Project row so imports (which now require an existing target) can land. */
+private fun MaDatabase.seedProject(id: String) {
+    projectQueries.insertProject(
+        id = id,
+        name = id,
+        description = null,
+        created_at = 0,
+        updated_at = 0,
+        is_archived = 0,
+        color = null,
+        icon = null,
+        message_count = 0,
+        total_tokens = 0
+    )
 }

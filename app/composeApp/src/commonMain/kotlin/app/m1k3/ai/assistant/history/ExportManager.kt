@@ -264,20 +264,32 @@ class ExportManager(private val database: MaDatabase) {
      * than trusted from the JSON), and re-inserts every message under new,
      * collision-free ids so the same backup can be restored more than once. The
      * conversation is created under the target [projectId], not the project
-     * recorded in the export, so a backup can be restored into any project. The
-     * conversation row and all messages are written in a single transaction, so a
-     * partial/failed restore rolls back rather than leaving an orphaned row.
+     * recorded in the export, so a backup can be restored into any EXISTING
+     * project. The conversation row and all messages are written in a single
+     * transaction, so a partial/failed restore rolls back rather than leaving an
+     * orphaned row.
      *
-     * @param projectId Project to import into
+     * @param projectId Project to import into; must name an existing project.
      * @param json JSON export string (as produced by [exportConversationToJson])
-     * @return New conversation ID, or null if the JSON could not be parsed. A
-     *   database error (e.g. an invalid [projectId]) propagates rather than
-     *   returning null — only a JSON parse failure yields null.
+     * @return New conversation ID, or null if the JSON could not be parsed OR
+     *   [projectId] does not name an existing project (both are rejected up front
+     *   without writing anything). A genuine database error during the transaction
+     *   still propagates — only bad input yields null.
      */
     fun importConversationFromJson(projectId: String, json: String): Long? {
         val export = try {
             this.json.decodeFromString<ConversationExport>(json)
         } catch (e: Exception) {
+            return null
+        }
+
+        // Reject an unknown target project the same way malformed JSON is rejected.
+        // FK enforcement (PRAGMA foreign_keys = ON) isn't set on the driver, so
+        // without this a typo'd/stale projectId would silently insert an orphaned
+        // conversation that no project screen can ever reach (getConversationsByProject
+        // filters by plain string equality) — a bad restore target would quietly eat
+        // the backup instead of failing.
+        if (database.projectQueries.getProjectById(projectId).executeAsOneOrNull() == null) {
             return null
         }
 
