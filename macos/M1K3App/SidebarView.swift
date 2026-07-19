@@ -36,7 +36,9 @@ struct SidebarView: View {
             Label("Chat", systemImage: "bubble.left.and.bubble.right")
                 .tag(SidebarSelection.chat)
 
-            Section("Workspace") {
+            // No header text (Kev's call) — the row icons/labels carry
+            // enough meaning on their own without a "Workspace" caption.
+            Section {
                 Label("Documents", systemImage: "books.vertical")
                     .tag(SidebarSelection.documents)
                 Label("Memories", systemImage: "brain")
@@ -46,6 +48,10 @@ struct SidebarView: View {
                 // Not .tag()'d — these open their own window/scene rather
                 // than driving `selection`, so they act as plain buttons
                 // inside the list without disturbing row-selection state.
+                // .buttonStyle(.plain) strips the default bordered/pill
+                // chrome List gives Button/SettingsLink content, so they
+                // read as the SAME flat row style as the tagged Labels
+                // above (Kev's call) rather than looking like a button.
                 // The trailing Review panel is deliberately NOT here: it's
                 // a resizable inspector column beside the chat, not a place
                 // you "navigate to" — a sidebar row for it would just be a
@@ -53,11 +59,13 @@ struct SidebarView: View {
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .buttonStyle(.plain)
                 Button {
                     openWindow(id: M1K3App.agentLogWindowID)
                 } label: {
                     Label("Agent Log", systemImage: "list.bullet.rectangle")
                 }
+                .buttonStyle(.plain)
             }
 
             Section("Conversations") {
