@@ -82,7 +82,15 @@ public extension EffectfulSpeechProvider {
     @discardableResult
     func speak(stream: AsyncThrowingStream<TimedPCMChunk, Error>, sampleRate: Double) async -> Bool {
         let generation = await claimEntry()
-        let outcome = StreamOutcome()
+        // Default TRUE = "handled, don't fall back". `runRender` bails WITHOUT running
+        // the closure when this entry was superseded (a newer speak() bumped the
+        // generation while we queued behind the gate) — leaving `spoke` at its
+        // default. The caller (KokoroSpeechProvider.synthesize) reads a `false` return
+        // as "nothing synthesised → speak it in the Apple voice"; falling back for an
+        // utterance we DELIBERATELY abandoned would re-speak stale text and stop() the
+        // newer render — the #52 barge-in bug, via the gate's own early-return. Only a
+        // render that actually ran and scheduled nothing sets this false.
+        let outcome = StreamOutcome(spoke: true)
         await entryGate.run { [self] in
             await runRender(generation) {
                 outcome.spoke = await self.renderStream(stream: stream, sampleRate: sampleRate)
@@ -145,9 +153,12 @@ extension EffectfulSpeechProvider {
 /// A Sendable box to carry `renderStream`'s Bool out of the `@Sendable` gate
 /// closure (which can't capture a mutable local). The gate serialises access and
 /// `speak(stream:)` reads it only after `entryGate.run` returns, so the plain
-/// `var` is safe — hence `@unchecked Sendable`.
+/// `var` is safe — hence `@unchecked Sendable`. Seeded `true` by the caller so a
+/// superseded entry (whose render closure never runs) reports "don't fall back";
+/// see `speak(stream:)`.
 private final class StreamOutcome: @unchecked Sendable {
-    var spoke = false
+    var spoke: Bool
+    init(spoke: Bool) { self.spoke = spoke }
 }
 
 /// Per-utterance state for one chunked playback: pending-buffer accounting, the

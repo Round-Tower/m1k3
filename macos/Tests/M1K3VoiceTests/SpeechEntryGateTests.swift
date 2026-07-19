@@ -71,4 +71,31 @@ struct SpeechEntryGateTests {
         #expect(await tracker.completed == 2)
         #expect(await tracker.maxObserved == 1)
     }
+
+    /// Reference box so the render closure (non-Sendable, non-escaping) can record
+    /// whether it ran without a cross-actor mutable capture.
+    private final class RanFlag: @unchecked Sendable { var value = false }
+
+    @Test("a superseded entry skips its render closure — so speak(stream:) won't spurious-fallback on barge-in")
+    func supersededEntrySkipsRender() async {
+        // The provider-level guard the streaming fix relies on: when a newer speak()
+        // supersedes a queued one, runRender must bail WITHOUT running the render —
+        // that's what lets speak(stream:)'s `true`-seeded outcome survive (so the
+        // abandoned utterance doesn't report "nothing spoken" and trigger a stale
+        // Apple-voice fallback that stop()s the newer render — the #52 barge-in bug).
+        let provider = EffectfulSpeechProvider()
+
+        let staleGeneration = await provider.claimEntry() // generation N
+        _ = await provider.claimEntry() // generation N+1 supersedes it
+
+        let ranStale = RanFlag()
+        await provider.runRender(staleGeneration) { ranStale.value = true }
+        #expect(ranStale.value == false) // superseded → closure never runs
+
+        // The current (latest) generation still renders normally.
+        let currentGeneration = await provider.claimEntry()
+        let ranCurrent = RanFlag()
+        await provider.runRender(currentGeneration) { ranCurrent.value = true }
+        #expect(ranCurrent.value == true)
+    }
 }
