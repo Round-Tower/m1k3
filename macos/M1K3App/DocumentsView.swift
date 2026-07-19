@@ -25,7 +25,6 @@ import SwiftUI
 
 struct DocumentsView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
 
     @State private var docs: [KnowledgeItem] = []
     @State private var quarantinedDocs: [KnowledgeItem] = []
@@ -72,8 +71,6 @@ struct DocumentsView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .frame(width: 480, height: 480)
-        .glassBackdrop()
         .onAppear { reload() }
     }
 
@@ -94,8 +91,6 @@ struct DocumentsView: View {
             .buttonStyle(.borderless)
             .help(showInternal ? "Hide internal items" : "Show quarantined items")
             .foregroundStyle(showInternal ? Color.primary : Color.secondary)
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
         }
         .padding(16)
     }

@@ -19,7 +19,6 @@ import UniformTypeIdentifiers
 
 struct CallsView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
     @State private var showImporter = false
     @State private var showConsentDialog = false
     @State private var selected: CallSession?
@@ -33,8 +32,6 @@ struct CallsView: View {
             if env.isRecording || env.isTranscribingCall { activityBanner }
             content
         }
-        .frame(width: 480, height: 540)
-        .glassBackdrop()
         .task { calls = env.calls() }
         .onChange(of: env.callCount) { _, _ in calls = env.calls() }
         .fileImporter(
@@ -54,7 +51,18 @@ struct CallsView: View {
             Text("You’re responsible for having consent from everyone on the call. "
                 + "Recording is on-device only — audio never leaves this Mac.")
         }
-        .sheet(item: $selected) { CallDetailView(call: $0) }
+        // Push, not a sheet: CallsView is a persistent sidebar destination now,
+        // not a modal — a lone remaining sheet-of-a-non-modal-view would read
+        // as an inconsistency. isPresented (not item:) deliberately — item:
+        // requires Hashable, which would mean adding a conformance to
+        // CallSession (M1K3Calls) that changes its equality semantics
+        // app-wide for a purely-navigational need.
+        .navigationDestination(isPresented: Binding(
+            get: { selected != nil },
+            set: { if !$0 { selected = nil } }
+        )) {
+            if let selected { CallDetailView(call: selected) }
+        }
         .safeAreaInset(edge: .bottom) {
             if let status = env.lastCallStatus {
                 HStack(spacing: 8) {
@@ -82,8 +90,6 @@ struct CallsView: View {
                 Label("Import transcript", systemImage: "doc.badge.plus")
             }
             .disabled(env.isImportingCall)
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
         }
         .padding(16)
     }
@@ -197,31 +203,20 @@ private struct CallRow: View {
 
 struct CallDetailView: View {
     let call: CallSession
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Label(call.title, systemImage: "phone.bubble").symbolRenderingMode(.hierarchical).font(.headline)
-                Spacer()
-                Button("Done") { dismiss() }.buttonStyle(.glassProminent)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let summary = call.fullSummary {
+                    summarySection(summary)
+                } else if let quick = call.quickSummary {
+                    sectionCard("Summary") { Text(quick.overview) }
+                }
+                transcriptSection
             }
             .padding(16)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let summary = call.fullSummary {
-                        summarySection(summary)
-                    } else if let quick = call.quickSummary {
-                        sectionCard("Summary") { Text(quick.overview) }
-                    }
-                    transcriptSection
-                }
-                .padding(16)
-            }
         }
-        .frame(width: 520, height: 560)
-        .glassBackdrop()
+        .navigationTitle(call.title)
     }
 
     private func summarySection(_ summary: CallSummary) -> some View {
