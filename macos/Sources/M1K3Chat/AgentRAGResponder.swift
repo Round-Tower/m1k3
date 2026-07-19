@@ -169,7 +169,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// The honest line M1K3 gives when Cool Head defers a heavy turn (critical
     /// thermal). Warm, brief, and truthful — never a silent non-answer.
     static let coolHeadDeferralMessage =
-        "My Mac's gone properly warm, so I'm easing off the heavy thinking for a "
+        "My \(HostPlatform.noun)'s gone properly warm, so I'm easing off the heavy thinking for a "
             + "moment to let it cool down. Give it a minute and ask me again."
 
     public func answerStreaming(
@@ -571,13 +571,13 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         case (true, true):
             "- For current or external information — weather, news, prices, "
                 + "anything happening now — use web_search. search_knowledge only "
-                + "finds documents already stored on this Mac."
+                + "finds documents already stored on \(HostPlatform.thisDevice)."
         case (true, false):
             "- For current or external information — weather, news, prices, "
                 + "anything happening now — use web_search."
         case (false, true):
-            "- search_knowledge only finds documents already stored on this "
-                + "Mac. You have no web access — if the stored knowledge can't "
+            "- search_knowledge only finds documents already stored on "
+                + "\(HostPlatform.thisDevice). You have no web access — if the stored knowledge can't "
                 + "answer, say so plainly; do not guess."
         case (false, false):
             "- You have no web access — if you don't know, say so plainly; "

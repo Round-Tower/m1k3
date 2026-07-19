@@ -268,12 +268,14 @@ let package = Package(
             path: "Tests/M1K3KnowledgeToolsTests"
         ),
         // Self-contained agent tools: web search (DuckDuckGo), date/time, system
-        // status. Depends ONLY on M1K3Agent (the AgentTool seam) — pure parsers/
-        // formatters tested against fixtures; network/IOKit adapters stay thin.
-        // The app injects these into the chat agent; M1K3Chat never links this.
+        // status. Depends on M1K3Agent (the AgentTool seam), M1K3Inference (the
+        // HostPlatform device noun in tool descriptions), and M1K3Preview —
+        // pure parsers/formatters tested against fixtures; network/IOKit
+        // adapters stay thin. The app injects these into the chat agent;
+        // M1K3Chat never links this.
         .target(
             name: "M1K3AgentTools",
-            dependencies: ["M1K3Agent", "M1K3Preview"],
+            dependencies: ["M1K3Agent", "M1K3Inference", "M1K3Preview"],
             path: "Sources/M1K3AgentTools"
         ),
         .testTarget(

@@ -11,6 +11,7 @@
 
 import Foundation
 import M1K3Agent
+import M1K3Inference
 
 /// Pure date → human-sentence formatting, exact under injected inputs.
 enum DateTimeDescriber {
@@ -27,7 +28,7 @@ enum DateTimeDescriber {
 public struct DateTimeTool: AgentTool {
     public let name = "datetime"
     public let description =
-        "Get the current date and time on this Mac. Argument: optional, ignored."
+        "Get the current date and time on \(HostPlatform.thisDevice). Argument: optional, ignored."
     public let parameters = [
         ToolParameter(name: "query", description: "ignored"),
     ]

@@ -40,9 +40,25 @@ public enum VoiceTier: String, CaseIterable, Identifiable, Sendable {
             "macOS's built-in speech. Works immediately, always on-device — clear, "
                 + "if a little robotic."
         case .m1k3Voice:
+            Self.m1k3VoiceDetail
+        }
+    }
+
+    /// Platform-honest wording, hand-rolled rather than folded onto
+    /// M1K3Inference's HostPlatform: M1K3Voice is deliberately dependency-free,
+    /// and a Voice→Inference edge to dedupe one string is worse layering than
+    /// the duplication. Consolidate if HostPlatform ever moves to a universal
+    /// leaf (M1K3LogCore) or Phase-B voice wiring gives Voice the dep anyway.
+    /// macOS bytes frozen, pinned in VoiceTierTests. (`.builtin`'s "macOS's
+    /// built-in speech" is left for Phase B — voice isn't wired on mobile yet.)
+    private static var m1k3VoiceDetail: String {
+        #if os(macOS)
             "A warm, natural neural voice that runs entirely on your Mac. One "
                 + "download, then offline forever. The voice M1K3 was meant to have."
-        }
+        #else
+            "A warm, natural neural voice that runs entirely on your device. One "
+                + "download, then offline forever. The voice M1K3 was meant to have."
+        #endif
     }
 
     public var glyph: String {

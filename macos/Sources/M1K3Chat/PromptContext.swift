@@ -21,6 +21,7 @@
 //  formatting; the cache/LoRA-safe placement is the load-bearing call). Prior: Unknown.
 
 import Foundation
+import M1K3Inference
 
 public enum PromptContext {
     /// The grounding line for `now`, naming `brainName` if known. English names,
@@ -34,6 +35,6 @@ public enum PromptContext {
         guard !brain.isEmpty else {
             return "Right now (true for this turn): it's \(date)."
         }
-        return "Right now (true for this turn): it's \(date), and you're \(brain) — running entirely on this Mac."
+        return "Right now (true for this turn): it's \(date), and you're \(brain) — running entirely on \(HostPlatform.thisDevice)."
     }
 }
