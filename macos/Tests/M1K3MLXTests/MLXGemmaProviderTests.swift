@@ -257,4 +257,30 @@ struct MLXGemmaProviderTests {
             for: ModelConfiguration(id: "someorg/some-future-model-4bit")
         ))
     }
+
+    @Test("the provider's live vision flag agrees with the load-path routing")
+    func providerVisionFlagMatchesRouting() {
+        // supportsImageInput is what actually gates images into the chat
+        // render (imagesAllowed) — pin the thin wrapper, not just the static.
+        #expect(MLXGemmaProvider(modelID: "mlx-community/gemma-4-12B-it-4bit").supportsImageInput)
+        #expect(!MLXGemmaProvider(modelID: "mlx-community/Qwen3-4B-Instruct-2507-4bit").supportsImageInput)
+    }
+
+    @Test("BrainTier.supportsImageInput can never drift from the VLM load-path allow-list")
+    func tierVisionFlagMatchesLoadPath() {
+        // Two sources of truth by construction (BrainTier is dependency-free,
+        // the allow-list lives beside the factories) — this pin makes a future
+        // Big model swap fail LOUDLY here instead of shipping an attach button
+        // for a brain that can't see. Review fold, PR #62.
+        for tier in BrainTier.allCases {
+            guard let modelID = tier.mlxModelID else {
+                #expect(!tier.supportsImageInput)
+                continue
+            }
+            #expect(
+                tier.supportsImageInput
+                    == MLXGemmaProvider.usesVLMLoadPath(for: ModelConfiguration(id: modelID))
+            )
+        }
+    }
 }

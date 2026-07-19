@@ -292,7 +292,9 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         let contextLine = PromptContext.line(now: Date(), brainName: brainNameProvider())
         let grounding = contextLine + "\n\n" + Self.grounding(
             chunks: chunks, memories: memories, toolNames: Set(tools.map(\.name)),
-            history: history, historyBudget: historyBudgetProvider(), style: style
+            history: history,
+            historyBudget: historyBudgetProvider().reservingImages(images.count),
+            style: style
         )
         Self.logTurnStart(chunks: chunks, tools: tools, grounding: grounding)
         // Fresh agent per turn — its reasoning trace must not bleed across

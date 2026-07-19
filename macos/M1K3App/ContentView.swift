@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var showAttachmentImporter = false
     @State private var pendingAttachments: [ImageAttachment] = []
+    @State private var attachmentError: String?
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
     /// Set by the intro card's "Introduce yourself" — the floor is theirs.
@@ -219,6 +220,17 @@ struct ContentView: View {
                     Task { await env.ingest(url: url) }
                 }
             }
+        }
+        .alert(
+            "Couldn't attach image",
+            isPresented: Binding(
+                get: { attachmentError != nil },
+                set: { if !$0 { attachmentError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(attachmentError ?? "")
         }
         .fileImporter(
             isPresented: $showAttachmentImporter,
@@ -586,8 +598,13 @@ struct ContentView: View {
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            if let attachment = try? Self.attachmentStore.store(originalURL: url) {
-                pendingAttachments.append(attachment)
+            do {
+                try pendingAttachments.append(Self.attachmentStore.store(originalURL: url))
+            } catch {
+                // A swallowed copy failure (disk full, source vanished) reads
+                // as "the picker ignored me" — the exact silent-failure class
+                // the vision probe caught model-side. Say so instead.
+                attachmentError = "Couldn't attach \(url.lastPathComponent): \(error.localizedDescription)"
             }
         }
     }

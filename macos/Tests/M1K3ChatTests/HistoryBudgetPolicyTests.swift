@@ -149,4 +149,23 @@ struct HistoryBudgetPolicyTests {
         )
         #expect(big == HistoryBudgetPolicy.budget(for: .big, reservedTokens: 3000, generationTokens: 2048))
     }
+
+    @Test("an image turn shrinks the replay window — vision tokens aren't free on the rotating tier")
+    func imageReserveShrinksBudget() {
+        // ~265 measured prompt tokens/image on gemma-4-12B (GemmaVisionSpike,
+        // 2026-07-14) → the 300-token reserve is conservative; chars ≈ 4×tokens.
+        let base = HistoryWindow.Budget(totalChars: 10000, perTurnChars: 4000, maxTurns: 8)
+        // No images: identity — the default path is byte-identical.
+        #expect(base.reservingImages(0) == base)
+        // One image: total shrinks by the per-image char reserve.
+        let one = base.reservingImages(1)
+        #expect(one.totalChars == 10000 - HistoryBudgetPolicy.imageReserveCharsPerImage)
+        #expect(one.maxTurns == base.maxTurns)
+        // The rotating-KV clamp invariant survives: perTurn never exceeds total.
+        #expect(one.perTurnChars <= one.totalChars)
+        // Many images floor at zero rather than going negative.
+        let flooded = base.reservingImages(100)
+        #expect(flooded.totalChars == 0)
+        #expect(flooded.perTurnChars == 0)
+    }
 }
