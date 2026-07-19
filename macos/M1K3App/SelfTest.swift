@@ -415,6 +415,17 @@ enum SelfTest {
             await runGemmaVisionSpike()
         }
 
+        // 10. Optional MTP speculative-decoding spike (M1K3_SELFTEST_MTP=1):
+        //     loads gemma-4-12B through MLXVLM (the only Gemma4 that emits
+        //     drafter state) + the 238MB paired MTP drafter, then runs a
+        //     greedy exact-match A/B (baseline vs speculative) across three
+        //     sliding-window regimes. See GemmaMTPSpike.swift for the
+        //     pre-registered questions (alias registration, accept rate /
+        //     speedup, and the wrapped-window pollution probe).
+        if SelfTestEnv.value("M1K3_SELFTEST_MTP") == "1" {
+            await runGemmaMTPSpike()
+        }
+
         emit("=== END SELF-TEST ===")
     }
 
@@ -441,6 +452,37 @@ enum SelfTest {
             emit(result.ramSnapshot)
         } catch {
             emit("✗ vision spike: \(error)")
+        }
+    }
+
+    /// The GemmaMTPSpike probe: target + drafter through MLXVLM, three
+    /// fixtures × two greedy legs each, reporting decode tok/s, draft
+    /// accept rate, passthrough reason, the exact-match divergence index
+    /// (speculative greedy MUST reproduce baseline greedy — divergence on
+    /// the wrapped fixtures is the rejected-token pollution signal), and a
+    /// RAM snapshot with both models resident.
+    private static func runGemmaMTPSpike() async {
+        let targetID = SelfTestEnv.value("M1K3_SELFTEST_MTP_MODEL") ?? GemmaMTPSpike.defaultTargetID
+        let drafterID = SelfTestEnv.value("M1K3_SELFTEST_MTP_DRAFTER") ?? GemmaMTPSpike.defaultDrafterID
+        emit("• mtp spike: target \(targetID) + drafter \(drafterID) via MLXVLM…")
+        do {
+            let result = try await GemmaMTPSpike.run(targetID: targetID, drafterID: drafterID)
+            for f in result.fixtures {
+                let accept = f.acceptRate.map { String(format: "%.0f%%", $0 * 100) } ?? "n/a"
+                let diverge = f.firstDivergenceIndex.map { "DIVERGES@\($0)" } ?? "exact-match"
+                emit("✓ mtp \(f.label): prompt \(f.promptTokens)tok · "
+                    + "baseline \(String(format: "%.1f", f.baselineTokensPerSecond))tok/s "
+                    + "(\(f.baselineTokens)tok) vs mtp \(String(format: "%.1f", f.mtpTokensPerSecond))tok/s "
+                    + "(\(f.mtpTokens)tok) = \(String(format: "%.2f", f.speedup))x · "
+                    + "accept \(accept) (\(f.acceptedDraftTokens ?? 0)/\(f.proposedDraftTokens ?? 0)) · "
+                    + "\(diverge)"
+                    + (f.passthroughReason.map { " · passthrough: \($0)" } ?? ""))
+                emit("  mtp \(f.label) baseline: \(f.baselineAnswer.prefix(160))")
+                emit("  mtp \(f.label) mtp:      \(f.mtpAnswer.prefix(160))")
+            }
+            emit(result.ramSnapshot)
+        } catch {
+            emit("✗ mtp spike: \(error)")
         }
     }
 
