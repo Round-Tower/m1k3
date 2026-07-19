@@ -42,16 +42,23 @@ public struct VoiceEffectChain: Sendable {
 }
 
 public extension VoiceEffectChain {
-    /// The signature M1K3 voice: a narrow intercom band for a crisp, slightly
-    /// "transmitted" timbre, a touch of tremolo shimmer for machine character,
-    /// gentle compression to even it out, and a final normalise so level is
-    /// consistent across utterances. Tuned to read as "M1K3" without obscuring words.
+    /// The signature M1K3 voice: a band-limited intercom "transmitted" timbre, a
+    /// touch of tremolo shimmer for machine character, then a gain-stage → soft-clip
+    /// → final-trim tail that evens the level out and adds a little grit.
+    ///
+    /// Order matters, and specifically the normalise BEFORE the soft-clip does: the
+    /// clip only acts on samples that reach its 0.6 threshold, so we normalise to
+    /// full-scale FIRST to drive it into that range (otherwise it's a no-op and the
+    /// stage does nothing — the bug this order fixes), then normalise again to 0.85
+    /// for a consistent, headroom-safe output level across utterances. Tuned to read
+    /// as "M1K3" without obscuring words; all values are ear-tunable constants.
     static var m1k3Character: VoiceEffectChain {
         VoiceEffectChain([
             BandpassEffect(lowFrequency: 320, highFrequency: 3600),
             TremoloEffect(rate: 22, depth: 0.12),
+            NormalizationEffect(level: 1.0), // gain-stage INTO the soft-clip below
             CompressionEffect(threshold: 0.6, ratio: 0.4),
-            NormalizationEffect(level: 0.85),
+            NormalizationEffect(level: 0.85), // final, headroom-safe output level
         ])
     }
 }
