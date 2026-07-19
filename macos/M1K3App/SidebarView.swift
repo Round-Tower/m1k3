@@ -79,6 +79,14 @@ struct SidebarView: View {
         // material). Leaving safe-area respected keeps "Chat" clear of the
         // lights; the .sidebar list style already reads correctly to the edge.
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+        // Drop the sidebar column's AUTOMATIC show/hide toggle — it lives in
+        // the sidebar's own toolbar strip (grouped with New chat), reading as
+        // part of the nav. ContentView puts a single toggle in the MAIN
+        // window toolbar instead (always visible, incl. when collapsed), so
+        // this auto one would just be a confusing duplicate. Removing it here
+        // (inside the sidebar column) is what actually targets it — a removal
+        // on the outer NavigationSplitView doesn't reach it.
+        .toolbar(removing: .sidebarToggle)
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button {

@@ -737,6 +737,20 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Our own sidebar toggle, pulled OUT of the sidebar's collapsible
+        // toolbar into the always-present window toolbar so show/hide is
+        // reachable in both states (replaces the auto one removed above).
+        // Removing the automatic toggle ALSO drops its ⌃⌘S binding, so we
+        // re-bind the standard Toggle-Sidebar shortcut here on our button.
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.snappy) { sidebarVisible.toggle() }
+            } label: {
+                Label("Toggle Sidebar", systemImage: "sidebar.leading")
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            .help("Show or hide the sidebar (⌃⌘S)")
+        }
         ToolbarItem(placement: .principal) {
             statusIndicator
         }
