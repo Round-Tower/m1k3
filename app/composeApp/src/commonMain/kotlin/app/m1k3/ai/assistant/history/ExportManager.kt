@@ -5,6 +5,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -257,19 +258,62 @@ class ExportManager(private val database: MaDatabase) {
     /**
      * Import a conversation from JSON (backup restoration).
      *
-     * TODO: Implement in Phase 2.1
+     * Parses a JSON produced by [exportConversationToJson], creates a fresh
+     * conversation in [projectId] (preserving the exported title, timestamps and
+     * counts), and re-inserts every message under new, collision-free ids so the
+     * same backup can be restored more than once. The conversation is created
+     * under the target [projectId], not the project recorded in the export, so a
+     * backup can be restored into any project.
      *
      * @param projectId Project to import into
-     * @param json JSON export string
-     * @return New conversation ID
+     * @param json JSON export string (as produced by [exportConversationToJson])
+     * @return New conversation ID, or null if the JSON could not be parsed
      */
     fun importConversationFromJson(projectId: String, json: String): Long? {
-        // TODO: Phase 2.1
-        // - Parse JSON
-        // - Create conversation
-        // - Insert messages
-        // - Return new conversation ID
-        return null
+        val export = try {
+            this.json.decodeFromString<ConversationExport>(json)
+        } catch (e: Exception) {
+            return null
+        }
+
+        // Recreate the conversation, preserving the exported metadata.
+        database.conversationMetadataQueries.insertConversation(
+            project_id = projectId,
+            title = export.title,
+            started_at = export.startedAt,
+            last_message_at = export.lastMessageAt,
+            message_count = export.messageCount.toLong(),
+            token_count = export.tokenCount.toLong(),
+            is_archived = 0
+        )
+
+        val newConversationId = database.conversationMetadataQueries
+            .getLastInsertId()
+            .executeAsOne()
+
+        // Re-insert messages with fresh ids keyed on the new conversation id, so
+        // restoring the same backup twice never collides on the message primary key.
+        export.messages.forEachIndexed { index, message ->
+            database.messageQueries.insertMessage(
+                id = "msg_${newConversationId}_$index",
+                project_id = projectId,
+                conversation_id = newConversationId,
+                role = message.role,
+                content = message.content,
+                tokens = message.tokens?.toLong(),
+                timestamp = message.timestamp,
+                image_uri = null,
+                sentiment_valence = null,
+                sentiment_arousal = null,
+                sentiment_dominance = null,
+                sentiment_emotion = null,
+                sentiment_intensity = null,
+                rag_sources = null,
+                rag_confidence = null
+            )
+        }
+
+        return newConversationId
     }
 }
 
