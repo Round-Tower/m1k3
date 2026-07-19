@@ -112,7 +112,8 @@ public final class M1K3ModelExecutor: LanguageModelExecuting {
     private func estimatedTokens(_ messages: [ToolMessage]) -> Int {
         let chars = messages.reduce(0) { sum, message in
             switch message {
-            case let .system(s), let .user(s): return sum + s.count
+            case let .system(s): return sum + s.count
+            case let .user(s, _): return sum + s.count
             case let .assistant(text, _): return sum + (text?.count ?? 0)
             case let .toolResult(_, output): return sum + output.count
             }

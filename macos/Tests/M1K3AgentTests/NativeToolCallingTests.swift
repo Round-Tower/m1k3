@@ -287,7 +287,7 @@ struct NativeToolCallingTests {
         // session keeps tools rendered; the instruction does the steering now).
         let provider = FakeToolCallingProvider { _, messages, _ in
             let instructed = messages.contains { message in
-                if case let .user(text) = message {
+                if case let .user(text, _) = message {
                     return text.contains("maximum number of steps")
                 }
                 return false

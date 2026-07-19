@@ -377,4 +377,30 @@ struct MLXParsedToolCallTests {
         let parsed = MLXToolMapping.parsedToolCall(from: libraryCall)
         #expect(parsed.arguments["tags"] == .array([.string("a"), .string("b")]))
     }
+
+    @Test("images ride the user chat message ONLY when the session allows them")
+    func imagesGatedByCapability() {
+        let url = URL(fileURLWithPath: "/tmp/photo.png")
+        let message = ToolMessage.user("what is this?", images: [ImageAttachment(url: url)])
+
+        // Vision-capable session (VLM-loaded 12B): image URL flows through.
+        let allowed = MLXToolMapping.chatMessage(from: message, imagesAllowed: true)
+        #expect(allowed.role == .user)
+        #expect(allowed.content == "what is this?")
+        #expect(allowed.images.count == 1)
+        if case let .url(passed) = allowed.images.first {
+            #expect(passed == url)
+        } else {
+            Issue.record("expected a .url image part")
+        }
+
+        // Text-only model (default): images dropped, text identical — a
+        // pre-vision render is byte-for-byte what it was.
+        let dropped = MLXToolMapping.chatMessage(from: message)
+        #expect(dropped.images.isEmpty)
+        #expect(dropped.content == "what is this?")
+
+        // Bare text user turn is unchanged either way.
+        #expect(MLXToolMapping.chatMessage(from: .user("hi"), imagesAllowed: true).images.isEmpty)
+    }
 }

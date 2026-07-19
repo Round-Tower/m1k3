@@ -35,6 +35,7 @@ extension LocalAgent {
     func runNative(
         provider: any ToolCallingProvider,
         goal: String,
+        images: [ImageAttachment] = [],
         grounding: String?,
         thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)?,
@@ -57,6 +58,7 @@ extension LocalAgent {
             let result = try await runNativeLoop(
                 session: session,
                 goal: goal,
+                images: images,
                 grounding: grounding,
                 onEvent: onEvent,
                 onConclusionToken: onConclusionToken,
@@ -73,6 +75,7 @@ extension LocalAgent {
     private func runNativeLoop(
         session: any ToolTurnSession,
         goal: String,
+        images: [ImageAttachment] = [],
         grounding: String?,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)?,
         onConclusionToken: (@Sendable (String) -> Void)?,
@@ -90,7 +93,7 @@ extension LocalAgent {
         // iteration 0 (MLXToolTurnSession's cross-turn reuse).
         var pendingMessages: [ToolMessage] = [
             .system(M1K3Persona.systemPrompt(includeExemplars: true)),
-            .user(Self.buildNativeGoal(goal: goal, grounding: grounding)),
+            .user(Self.buildNativeGoal(goal: goal, grounding: grounding), images: images),
         ]
 
         logRunStart(goal: goal, grounding: grounding)

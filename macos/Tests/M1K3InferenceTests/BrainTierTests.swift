@@ -229,4 +229,20 @@ struct BrainTierTests {
         // Only big rotates — the clamp is a correctness bound there, a latency knob elsewhere.
         #expect(BrainTier.allCases.filter(\.usesRotatingKVCache) == [.big])
     }
+
+    @Test("image input is a Big-only capability — gemma-4-12B through the VLM load path")
+    func imageInputCapability() {
+        // big = gemma-4-12B loaded via VLMModelFactory (vision tower resident,
+        // proven on-device 2026-07-14/19) — the ONLY tier that can consume an
+        // image today. The UI reads this to show/hide the attach affordance;
+        // the mapping layer reads it to drop images before a non-vision model.
+        #expect(BrainTier.big.supportsImageInput)
+        // lil (dense Qwen3 text checkpoint) has no vision tower.
+        #expect(!BrainTier.lil.supportsImageInput)
+        // mini (AFM): Apple's bridge carries no image path in our
+        // LanguageModel mirror yet — pinned OFF until that lands, so the UI
+        // never offers an attach that would be silently dropped.
+        #expect(!BrainTier.mini.supportsImageInput)
+        #expect(BrainTier.allCases.filter(\.supportsImageInput) == [.big])
+    }
 }

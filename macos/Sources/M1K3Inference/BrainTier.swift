@@ -222,6 +222,17 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
         }
     }
 
+    /// Whether this tier can consume an attached image. Only Big today:
+    /// gemma-4-12B loads through VLMModelFactory with its vision tower
+    /// resident (proven on-device 2026-07-14/19, ~zero RAM delta vs the
+    /// text-only load). The UI reads this to show/hide the attach affordance;
+    /// the provider-side mapping drops images (loudly) for any tier where
+    /// this is false. Mini stays off until the AFM bridge carries an image
+    /// path; lil is a text-only checkpoint.
+    public var supportsImageInput: Bool {
+        self == .big
+    }
+
     /// True when the backing model uses a fixed sliding-window KV cache
     /// (`RotatingKVCache`): exceeding `approximateContextTokens` silently drops the
     /// prompt HEAD rather than erroring, so the budget layer must clamp BELOW it

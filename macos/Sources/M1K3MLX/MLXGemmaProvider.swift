@@ -631,6 +631,14 @@ extension MLXGemmaProvider {
     /// quantized cache — so they (and unknown families) stay unquantized.
     /// Verified against the model sources at mlx-swift-lm 3.31.3; re-audit on
     /// any version bump.
+    /// Whether the model this provider serves can consume attached images —
+    /// true exactly when it loads through the VLM factory (vision tower
+    /// resident). Read by the tool-session mapping to decide whether images
+    /// ride the chat render or are dropped.
+    public var supportsImageInput: Bool {
+        Self.usesVLMLoadPath(for: ModelConfiguration(id: modelIdentifier))
+    }
+
     /// Whether this checkpoint loads through VLMModelFactory (vision tower +
     /// audio embedder resident) instead of MLXLLM's text-only strip.
     ///

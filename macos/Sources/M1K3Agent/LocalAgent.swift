@@ -100,6 +100,7 @@ public actor LocalAgent {
     /// baseline that works on any model.
     public func run(
         goal: String,
+        images: [ImageAttachment] = [],
         context groundingContext: String? = nil,
         thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
@@ -120,6 +121,7 @@ public actor LocalAgent {
             return try await runNative(
                 provider: toolProvider,
                 goal: goal,
+                images: images,
                 grounding: groundingContext,
                 thinkingEnabled: thinkingEnabled,
                 onEvent: onEvent,
@@ -127,6 +129,10 @@ public actor LocalAgent {
                 onReasoningToken: onReasoningToken
             )
         }
+        // The ReAct floor renders a plain text prompt — images can't ride it.
+        // Unreachable for a vision turn in practice (only Big supports images
+        // and Big runs native), but if a floor turn ever arrives with images
+        // the text goal still runs; the mapping layer's drop rules apply.
 
         return try await runReAct(
             goal: goal,

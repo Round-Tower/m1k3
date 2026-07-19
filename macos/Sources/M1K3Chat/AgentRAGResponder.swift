@@ -177,6 +177,15 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         history: [ChatTurn],
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, images: [], history: history, onActivity: onActivity)
+    }
+
+    public func answerStreaming(
+        _ question: String,
+        images: [ImageAttachment],
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         // Cool Head at minimal (critical thermal, opt-in ON): skip the whole heavy
         // path — no embed, no retrieval, no decode — and answer honestly instead of
         // piling onto a throttling Mac. The caller (ChatSession) has already recorded
@@ -234,6 +243,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             let turnTask = Task {
                 await runAgentTurn(
                     question: question,
+                    images: images,
                     chunks: chunks,
                     memories: memories,
                     history: history,
@@ -264,6 +274,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
     /// on throw or empty.
     private func runAgentTurn(
         question: String,
+        images: [ImageAttachment],
         chunks: [ChunkHit],
         memories: [ChunkHit],
         history: [ChatTurn],
@@ -314,6 +325,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         do {
             let result = try await agent.run(
                 goal: question,
+                images: images,
                 context: grounding,
                 thinkingEnabled: thinkingEnabled,
                 onEvent: { event in

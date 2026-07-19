@@ -79,6 +79,17 @@ public protocol RAGResponding: Sendable {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
 
+    /// As above, with images the user attached to this turn. Only a
+    /// vision-capable responder consumes them (Big via the VLM load path);
+    /// the default drops them and falls through to the history variant, so
+    /// text-only responders behave exactly as before.
+    func answerStreaming(
+        _ question: String,
+        images: [ImageAttachment],
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>)
+
     /// Sources gathered DURING the turn by tools the model called (e.g.
     /// search_knowledge). DESTRUCTIVE: this is a draining read — a second call
     /// returns empty. Call exactly once, after the stream completes; the hits
@@ -101,6 +112,15 @@ public extension RAGResponding {
         onActivity: @escaping @Sendable (ResponderActivity) -> Void
     ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
         try await answerStreaming(question, onActivity: onActivity)
+    }
+
+    func answerStreaming(
+        _ question: String,
+        images _: [ImageAttachment],
+        history: [ChatTurn],
+        onActivity: @escaping @Sendable (ResponderActivity) -> Void
+    ) async throws -> (sources: [ChunkHit], stream: AsyncStream<String>) {
+        try await answerStreaming(question, history: history, onActivity: onActivity)
     }
 
     func collectedSources() -> [ChunkHit] {
@@ -146,10 +166,15 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
     /// read as odd, not helpful. Transient — omitted from `CodingKeys` like
     /// `citations`/`activityLabel`/`metrics`, so old transcripts still decode.
     public var followUps: [String] = []
+    /// Images the user attached to this turn — file URLs inside the app
+    /// container (the composer copies attachments in before sending, so
+    /// history replay can re-open them). Optional so pre-vision transcripts
+    /// decode to nil (the `reasoning` precedent); nil and empty mean the same.
+    public var attachments: [ImageAttachment]?
     public var status: Status
 
     enum CodingKeys: String, CodingKey {
-        case id, role, text, sources, status, reasoning
+        case id, role, text, sources, status, reasoning, attachments
     }
 
     public init(
@@ -159,6 +184,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
         sources: [ChunkHit] = [],
         citations: [Citation] = [],
         reasoning: String? = nil,
+        attachments: [ImageAttachment]? = nil,
         status: Status
     ) {
         self.id = id
@@ -167,6 +193,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable, Codable {
         self.sources = sources
         self.citations = citations
         self.reasoning = reasoning
+        self.attachments = attachments
         self.status = status
     }
 }
@@ -282,7 +309,7 @@ public final class ChatSession {
 
     /// Send a user turn and stream the grounded answer into a new assistant
     /// message. Blank input and re-entrant sends are no-ops.
-    public func send(_ text: String) async {
+    public func send(_ text: String, images: [ImageAttachment] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isResponding else { return }
 
@@ -294,7 +321,11 @@ public final class ChatSession {
             return ChatTurn(role: message.role == .user ? .user : .assistant, text: message.text)
         }
 
-        messages.append(ChatMessage(role: .user, text: trimmed, status: .complete))
+        messages.append(ChatMessage(
+            role: .user, text: trimmed,
+            attachments: images.isEmpty ? nil : images,
+            status: .complete
+        ))
         let assistantID = UUID()
         messages.append(ChatMessage(id: assistantID, role: .assistant, text: "", status: .streaming))
 
@@ -304,6 +335,7 @@ public final class ChatSession {
         do {
             let (sources, stream) = try await responder.answerStreaming(
                 trimmed,
+                images: images,
                 history: history,
                 onActivity: { [weak self] activity in
                     Task { @MainActor in
