@@ -140,11 +140,6 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
         .glassBackdrop()
-        // Fill both NavigationSplitView columns to the WINDOW top under
-        // .hiddenTitleBar — same fix the trailing .inspector already needed
-        // (a column otherwise insets below the toolbar strip and the window
-        // background shows as a black band above it).
-        .ignoresSafeArea(.container, edges: .top)
         .dropDestination(for: URL.self) { urls, _ in
             for url in urls {
                 Task { await env.ingest(url: url) }

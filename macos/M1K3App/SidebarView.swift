@@ -57,9 +57,14 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        // Fill to the WINDOW top under .hiddenTitleBar — same fix the
-        // trailing .inspector needed for the identical black-band bug.
-        .ignoresSafeArea(.container, edges: .top)
+        // NOTE: deliberately NOT .ignoresSafeArea(.container, edges: .top)
+        // here, unlike the trailing .inspector — tried it (2026-07-19), and
+        // unlike the inspector's bespoke ReviewPanel, this List's own first
+        // ROW slid under the traffic lights (a NavigationSplitView sidebar's
+        // vibrancy already extends to the window top on its own; the
+        // inspector's fix doesn't transfer — that column has no built-in
+        // material). Leaving safe-area respected keeps "Chat" clear of the
+        // lights; the .sidebar list style already reads correctly to the edge.
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button {
