@@ -624,13 +624,6 @@ extension MLXGemmaProvider {
             || name.contains("ternary-bonsai-27b")
     }
 
-    /// Allow-list of families whose attention routes through upstream's
-    /// `attentionWithCacheUpdate` dispatcher (handles `QuantizedKVCache` via
-    /// `updateQuantized`). Gemma3nText and Gemma4Text call
-    /// `cache.update(keys:values:)` directly — an upstream fatalError on a
-    /// quantized cache — so they (and unknown families) stay unquantized.
-    /// Verified against the model sources at mlx-swift-lm 3.31.3; re-audit on
-    /// any version bump.
     /// Whether the model this provider serves can consume attached images —
     /// true exactly when it loads through the VLM factory (vision tower
     /// resident). Read by the tool-session mapping to decide whether images
@@ -655,6 +648,13 @@ extension MLXGemmaProvider {
         configuration.name.lowercased().contains("gemma-4-12b")
     }
 
+    /// Allow-list of families whose attention routes through upstream's
+    /// `attentionWithCacheUpdate` dispatcher (handles `QuantizedKVCache` via
+    /// `updateQuantized`). Gemma3nText and Gemma4Text call
+    /// `cache.update(keys:values:)` directly — an upstream fatalError on a
+    /// quantized cache — so they (and unknown families) stay unquantized.
+    /// Verified against the model sources at mlx-swift-lm 3.31.3; re-audit on
+    /// any version bump.
     static func supportsQuantizedKVCache(for configuration: ModelConfiguration) -> Bool {
         let modelName = configuration.name.lowercased()
         // "qwen3" covers Qwen3 and every Qwen3.5 spelling; "gemma-3-" cannot

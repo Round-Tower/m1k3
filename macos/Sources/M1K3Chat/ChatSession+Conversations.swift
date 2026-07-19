@@ -59,11 +59,20 @@ public extension ChatSession {
             ? messages
             : ((try? history.loadMessages(id: id)) ?? nil) ?? []
         let attachments = doomed.compactMap(\.attachments).flatMap(\.self)
-        _ = try? history.delete(id: id)
-        AttachmentStore.discard(attachments)
+        let rowDeleted = (try? history.delete(id: id)) ?? false
         if id == activeConversationID {
+            // The in-memory transcript resets regardless of the row's fate,
+            // so the files go with it either way — a surviving orphan row
+            // will list with broken thumbnails, which the drawer's next
+            // delete attempt cleans up; the photo being GONE wins here.
+            AttachmentStore.discard(attachments)
             beginConversation(id: UUID(), messages: [], title: nil)
         } else {
+            // Non-active: discard ONLY if the row actually went. A failed DB
+            // delete leaves the conversation listed — its thumbnails must not
+            // be broken by an eager file sweep (the inverse privacy failure:
+            // row survives, photo gone).
+            if rowDeleted { AttachmentStore.discard(attachments) }
             noteHistoryChanged()
         }
     }

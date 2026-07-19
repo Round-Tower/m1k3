@@ -601,17 +601,22 @@ struct ContentView: View {
     /// picker URLs are only readable inside the access window — the copy is
     /// what makes the attachment durable for the send and history replay).
     private func attachImages(at urls: [URL]) {
+        // A swallowed copy failure (disk full, source vanished) reads as
+        // "the picker ignored me" — the exact silent-failure class the
+        // vision probe caught model-side. Accumulate so a multi-select
+        // surfaces EVERY failed file, not just whichever failed last.
+        var failures: [String] = []
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             do {
                 try pendingAttachments.append(Self.attachmentStore.store(originalURL: url))
             } catch {
-                // A swallowed copy failure (disk full, source vanished) reads
-                // as "the picker ignored me" — the exact silent-failure class
-                // the vision probe caught model-side. Say so instead.
-                attachmentError = "Couldn't attach \(url.lastPathComponent): \(error.localizedDescription)"
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }
+        }
+        if !failures.isEmpty {
+            attachmentError = failures.joined(separator: "\n")
         }
     }
 
