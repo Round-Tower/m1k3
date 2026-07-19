@@ -223,4 +223,64 @@ struct MLXGemmaProviderTests {
         }
         #expect(!collected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
+
+    @Test("VLM load path is exact-id allow-listed — only checkpoints PROVEN to load under MLXVLM")
+    func vlmLoadPathResolution() {
+        // gemma-4-12B loads under MLXVLM with the vision tower resident —
+        // proven on-device twice (GemmaVisionSpike 2026-07-14: 7333MB peak;
+        // GemmaMTPSpike 2026-07-19: 7789MB peak with a drafter beside it) and
+        // text behaviour through the VLM container proven by three greedy
+        // fixtures. The VLM path is what unlocks image input AND the MTP
+        // drafter state emission (once upstream wires Gemma4Unified).
+        #expect(MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "mlx-community/gemma-4-12B-it-4bit")
+        ))
+        // e4b is NOT routable to MLXVLM: keyNotFound layers.24.self_attn.v_proj
+        // (upstream's Gemma4Unified sanitize lacks the KV-shared-layer fix;
+        // e4b has 18 shared layers, 12B has 0 — GemmaVisionSpike review,
+        // 2026-07-14). Family-wide routing would brick the fallback tier.
+        #expect(!MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "mlx-community/gemma-4-e4b-it-4bit")
+        ))
+        // Text-only families stay on the LLM factory untouched.
+        #expect(!MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "mlx-community/gemma-3-1b-it-qat-4bit")
+        ))
+        #expect(!MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "mlx-community/Qwen3-4B-Instruct-2507-4bit")
+        ))
+        #expect(!MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "prism-ml/Ternary-Bonsai-8B-2bit-mlx")
+        ))
+        // Unknown ids default to the LLM factory — the known-good path.
+        #expect(!MLXGemmaProvider.usesVLMLoadPath(
+            for: ModelConfiguration(id: "someorg/some-future-model-4bit")
+        ))
+    }
+
+    @Test("the provider's live vision flag agrees with the load-path routing")
+    func providerVisionFlagMatchesRouting() {
+        // supportsImageInput is what actually gates images into the chat
+        // render (imagesAllowed) — pin the thin wrapper, not just the static.
+        #expect(MLXGemmaProvider(modelID: "mlx-community/gemma-4-12B-it-4bit").supportsImageInput)
+        #expect(!MLXGemmaProvider(modelID: "mlx-community/Qwen3-4B-Instruct-2507-4bit").supportsImageInput)
+    }
+
+    @Test("BrainTier.supportsImageInput can never drift from the VLM load-path allow-list")
+    func tierVisionFlagMatchesLoadPath() {
+        // Two sources of truth by construction (BrainTier is dependency-free,
+        // the allow-list lives beside the factories) — this pin makes a future
+        // Big model swap fail LOUDLY here instead of shipping an attach button
+        // for a brain that can't see. Review fold, PR #62.
+        for tier in BrainTier.allCases {
+            guard let modelID = tier.mlxModelID else {
+                #expect(!tier.supportsImageInput)
+                continue
+            }
+            #expect(
+                tier.supportsImageInput
+                    == MLXGemmaProvider.usesVLMLoadPath(for: ModelConfiguration(id: modelID))
+            )
+        }
+    }
 }

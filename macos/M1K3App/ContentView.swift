@@ -22,6 +22,7 @@
 //  karaoke + controls float on glass. Confidence 0.75 (look verify-at-⌘R).
 
 import M1K3Avatar
+import M1K3Chat
 import M1K3Inference
 import M1K3Voice
 import SwiftUI
@@ -38,6 +39,9 @@ struct ContentView: View {
     @State private var showCalls = false
     @State private var showHistory = false
     @State private var showImporter = false
+    @State private var showAttachmentImporter = false
+    @State private var pendingAttachments: [ImageAttachment] = []
+    @State private var attachmentError: String?
     @State private var showConsentDialog = false
     @State private var isDropTargeted = false
     /// Set by the intro card's "Introduce yourself" — the floor is theirs.
@@ -217,6 +221,26 @@ struct ContentView: View {
                 }
             }
         }
+        .alert(
+            "Couldn't attach image",
+            isPresented: Binding(
+                get: { attachmentError != nil },
+                set: { if !$0 { attachmentError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(attachmentError ?? "")
+        }
+        .fileImporter(
+            isPresented: $showAttachmentImporter,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true
+        ) { result in
+            if case let .success(urls) = result {
+                attachImages(at: urls)
+            }
+        }
         .safeAreaInset(edge: .top, spacing: 0) {
             // The mic/speech recovery outranks ingest status — it's the only
             // way back from a denied grant (which used to fail silently).
@@ -339,6 +363,58 @@ struct ContentView: View {
     // MARK: - Input
 
     private var inputBar: some View {
+        VStack(spacing: 8) {
+            if !pendingAttachments.isEmpty {
+                pendingAttachmentsStrip
+            }
+            inputRow
+        }
+    }
+
+    /// Thumbnails of images staged for the next send, each removable. Only
+    /// reachable on a vision-capable brain (the attach button gates), and
+    /// cleared if the brain switches to one that can't see.
+    private var pendingAttachmentsStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingAttachments, id: \.url) { attachment in
+                    ZStack(alignment: .topTrailing) {
+                        AsyncImage(url: attachment.url) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.secondary.opacity(0.2)
+                        }
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        Button {
+                            pendingAttachments.removeAll { $0 == attachment }
+                            // The staged copy is ours — removing the chip
+                            // removes the file (privacy: nothing lingers).
+                            AttachmentStore.discard([attachment])
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(2)
+                        .accessibilityLabel("Remove attachment")
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(maxWidth: Self.chatContentMaxWidth)
+        .frame(maxWidth: .infinity)
+        .onChange(of: env.selectedBrain) {
+            if !env.selectedBrain.supportsImageInput {
+                AttachmentStore.discard(pendingAttachments)
+                pendingAttachments = []
+            }
+        }
+    }
+
+    private var inputRow: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(spacing: 12) {
                 if env.isListening {
@@ -358,6 +434,20 @@ struct ContentView: View {
                         .padding(.vertical, 12)
                         .glassEffect(.regular, in: .rect(cornerRadius: 22))
                         .onSubmit(send)
+                }
+
+                if env.selectedBrain.supportsImageInput {
+                    Button { showAttachmentImporter = true } label: {
+                        Image(systemName: "photo.badge.plus")
+                            .imageScale(.large)
+                            .fontWeight(.semibold)
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .disabled(env.chat.isResponding)
+                    .help("Attach an image — Big can see it")
+                    .accessibilityLabel("Attach image")
                 }
 
                 Button { env.chat.startNewConversation() } label: {
@@ -501,9 +591,40 @@ struct ContentView: View {
     private func send() {
         guard canSend else { return }
         let text = draft
+        let images = pendingAttachments
         draft = ""
-        Task { await env.send(text) }
+        pendingAttachments = []
+        Task { await env.send(text, images: images) }
     }
+
+    /// Copy picked images into the app's attachments store (security-scoped
+    /// picker URLs are only readable inside the access window — the copy is
+    /// what makes the attachment durable for the send and history replay).
+    private func attachImages(at urls: [URL]) {
+        // A swallowed copy failure (disk full, source vanished) reads as
+        // "the picker ignored me" — the exact silent-failure class the
+        // vision probe caught model-side. Accumulate so a multi-select
+        // surfaces EVERY failed file, not just whichever failed last.
+        var failures: [String] = []
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                try pendingAttachments.append(Self.attachmentStore.store(originalURL: url))
+            } catch {
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        if !failures.isEmpty {
+            attachmentError = failures.joined(separator: "\n")
+        }
+    }
+
+    /// Attachments live in the app container beside the other user data.
+    private static let attachmentStore = AttachmentStore(
+        directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("attachments")
+    )
 
     /// Keep the newest turn pinned to the bottom as it streams (text or reasoning).
     /// Paused while voice is active so the transcript becomes the calm scroll-back

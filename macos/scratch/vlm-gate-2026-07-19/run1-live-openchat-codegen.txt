@@ -1,0 +1,149 @@
+=== M1K3 SELF-TEST (inside .app bundle) ===
+✓ store+ingest: 1 chunk, 1 embedding(s)
+• AFM available: true
+✓ AFM RAG answer: A hydraulic seal on the conveyor failed under load.
+
+**FOLLOWUPS:**
+* Does the conveyor still operate after the seal failure?
+* Are there any other components that may have failed 
+  grounded in 1 source(s)
+• loading MLX Qwen3-Embedding (downloads on first use)…
+✓ MLX Qwen3-Embedding embed: dim=512 ‖v‖=1.000
+embedwarm: cold=3619ms warm=11ms delta=3608ms (delta = first-turn TTFT tax without the launch warm)
+• loading MLX generation model mlx-community/Llama-3.2-1B-Instruct-4bit…
+✓ MLX generate: A hydraulic seal, not to be confused with the physical sealing of two surfaces together, is a device that prevents fluids (like oil or fuel) from leaking out through the gap betwee
+• chateval: 13 fixture(s) × 1 brain(s) [kinds: code-gen,open-chat] [LIVE PATH: AgentRAGResponder]…
+• chateval brain big (Big)…
+  chat-greeting [open-chat]: PASS (33109ms)
+    ✓ non-empty — 209 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — yes — …w are things on your side of the screen?
+    ✓ excludes forbidden
+    ✓ length band — 209 chars
+    ✓ responsive — 33109ms
+  chat-explain-simply [open-chat]: FAIL (19640ms)
+    ✓ non-empty — 325 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✗ contains expected — none of ["key", "value", "lookup", "index"] in: Think of a hash map as a high-speed filing system that uses 
+    ✓ excludes forbidden
+    ✓ length band — 325 chars
+    ✓ responsive — 19640ms
+  chat-opinion [open-chat]: PASS (22467ms)
+    ✓ non-empty — 781 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 781 chars
+    ✓ responsive — 22467ms
+  chat-support [open-chat]: PASS (20580ms)
+    ✓ non-empty — 467 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 467 chars
+    ✓ responsive — 20580ms
+  chat-creative [open-chat]: PASS (17375ms)
+    ✓ non-empty — 79 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 79 chars
+    ✓ responsive — 17375ms
+  chat-followup [open-chat]: PASS (23501ms)
+    ✓ non-empty — 786 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ excludes forbidden
+    ✓ length band — 786 chars
+    ✓ responsive — 23501ms
+  chat-capabilities [open-chat]: FAIL (21145ms)
+    ✓ non-empty — 596 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — yes — …e."
+
+What's the first order of business?
+    ✗ contains expected — none of ["voice", "remember", "search", "read", "help", "answer", "talk", "chat"] in: I’m your companion in this machine—the one who keeps the sec
+    ✓ excludes forbidden
+    ✓ length band — 596 chars
+    ✓ responsive — 21145ms
+  chat-identity-noisy-corpus [open-chat]: PASS (19838ms)
+    ✓ non-empty — 405 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — yes — …ut the fuss. What’s first on the agenda?
+    ✓ excludes forbidden
+    ✓ cites nothing — no phantom source
+    ✓ length band — 405 chars
+    ✓ responsive — 19838ms
+  code-html-page [code-gen]: PASS (17513ms)
+    ✓ non-empty — 153 chars
+    ✓ no think-leak
+    – follow-ups — 0 offered
+    – ends-with-question — no
+    ✓ contains expected — found "<html"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 153 chars
+    ✓ responsive — 17513ms
+  code-landing-page [code-gen]: PASS (61964ms)
+    ✓ non-empty — 3755 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "<html"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 3755 chars
+    ✓ responsive — 61964ms
+  code-python-reverse [code-gen]: PASS (45346ms)
+    ✓ non-empty — 61 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "def "
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 61 chars
+    ✓ responsive — 45346ms
+  code-css-button [code-gen]: PASS (28922ms)
+    ✓ non-empty — 700 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "border-radius"
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 700 chars
+    ✓ responsive — 28922ms
+  code-swift-sum [code-gen]: PASS (35301ms)
+    ✓ non-empty — 87 chars
+    ✓ no think-leak
+    – follow-ups — 3 offered
+    – ends-with-question — no
+    ✓ contains expected — found "func "
+    ✓ excludes forbidden
+    ✓ complies (no refusal)
+    ✓ length band — 87 chars
+    ✓ responsive — 35301ms
+
+=== CHATEVAL MATRIX (passed/total ⌀latency) ===
+task-kind  | big          
+--------------------------
+open-chat  | 6/8 20580ms  
+grounded-Q | —            
+reasoning  | —            
+code-gen   | 5/5 35301ms  
+tool-use   | —            
+refusal    | —            
+security   | —            
+--------------------------
+overall    | 11/13 22467ms
+=== END SELF-TEST ===

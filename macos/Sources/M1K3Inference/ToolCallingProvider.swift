@@ -173,13 +173,22 @@ public enum ToolMessage: Sendable, Equatable {
     /// The standing persona/instructions, rendered into the chat template's
     /// system turn. Sent once, at the start of a turn's transcript.
     case system(String)
-    /// The opening instruction + goal (and any grounding context).
-    case user(String)
+    /// The opening instruction + goal (and any grounding context), plus any
+    /// images the user attached to the turn. Only a vision-capable provider
+    /// consumes the images (BrainTier.supportsImageInput); every other
+    /// renderer drops them loudly at its mapping site.
+    case user(String, images: [ImageAttachment])
     /// What the model produced last turn — free text and/or the tool calls it
     /// requested. Threaded back so the model sees its own prior calls correctly.
     case assistant(text: String?, toolCalls: [ParsedToolCall])
     /// The observation from executing one tool call, role-tagged as a result.
     case toolResult(name: String, output: String)
+
+    /// Source-compatible bare-text user turn — identical to
+    /// `.user(text, images: [])`, so no pre-vision call site changes.
+    public static func user(_ text: String) -> ToolMessage {
+        .user(text, images: [])
+    }
 }
 
 /// Per-turn options for a tool session. Extend here rather than growing the

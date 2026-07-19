@@ -692,7 +692,7 @@ final class AppEnvironment {
     /// Send a user message: drives avatar thinking → generating → idle, then
     /// hands off to ChatSession. The speech delegate handles the speaking→idle
     /// transition if the user taps Speak on the response.
-    func send(_ text: String) async {
+    func send(_ text: String, images: [ImageAttachment] = []) async {
         // Backstop: never run a turn before the active brain is loaded into memory.
         // The chat surface already gates this (canSend + the readiness overlay), but
         // other entry points funnel here too — the menu-bar "Continue in chat", or a
@@ -718,7 +718,7 @@ final class AppEnvironment {
                 self.avatar.setActivity(.generating)
             }
         }
-        await chat.send(text)
+        await chat.send(text, images: images)
         advance.cancel()
         // A failed turn earns the error earcon (the gate mutes it if M1K3 is
         // mid-speech, which a failure here never is).

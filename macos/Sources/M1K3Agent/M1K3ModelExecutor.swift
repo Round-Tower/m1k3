@@ -109,10 +109,13 @@ public final class M1K3ModelExecutor: LanguageModelExecuting {
 
     /// Cheap input-token estimate for usage accounting (~4 chars/token). The real
     /// session reports exact counts on the macOS 27 path; this is the floor.
+    /// Deliberately text-only: attached images (~265 soft tokens each on the
+    /// vision tier) aren't counted — under-counting is the floor's contract.
     private func estimatedTokens(_ messages: [ToolMessage]) -> Int {
         let chars = messages.reduce(0) { sum, message in
             switch message {
-            case let .system(s), let .user(s): return sum + s.count
+            case let .system(s): return sum + s.count
+            case let .user(s, _): return sum + s.count
             case let .assistant(text, _): return sum + (text?.count ?? 0)
             case let .toolResult(_, output): return sum + output.count
             }

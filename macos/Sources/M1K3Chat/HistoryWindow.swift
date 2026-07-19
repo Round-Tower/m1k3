@@ -75,6 +75,22 @@ public enum HistoryWindow {
             perTurnChars: HistoryWindow.maxCharsPerTurn,
             maxTurns: HistoryWindow.maxTurns
         )
+
+        /// The same window minus a per-image reserve: an attached image's
+        /// vision soft tokens share the context with the replay, and the one
+        /// tier that sees images (Big) overflows its rotating window
+        /// SILENTLY — so the replay yields, never the persona/grounding
+        /// head. Zero images is the identity; perTurnChars is re-clamped so
+        /// the rotating-KV invariant (perTurn ≤ total) survives the shrink.
+        public func reservingImages(_ count: Int) -> Budget {
+            guard count > 0 else { return self }
+            let total = max(0, totalChars - count * HistoryBudgetPolicy.imageReserveCharsPerImage)
+            return Budget(
+                totalChars: total,
+                perTurnChars: min(perTurnChars, total),
+                maxTurns: maxTurns
+            )
+        }
     }
 
     /// Render the replay block for the grounding prompt, or nil when there is

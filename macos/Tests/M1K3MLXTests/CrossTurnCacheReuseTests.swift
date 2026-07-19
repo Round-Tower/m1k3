@@ -78,4 +78,18 @@ struct CrossTurnCacheReuseTests {
     func emptyLayersNotReusable() {
         #expect(!CrossTurnCacheReuse.cacheReusable(layersTrimmable: []))
     }
+
+    @Test("an image-carrying turn vetoes suffix reuse — token slicing would drop the pixels")
+    func imageTurnVetoesReuse() {
+        // The reuse path rebuilds the prefill input as
+        // LMInput(tokens: fullIDs[reuse...]) — RAW TOKEN IDS. A prepared
+        // image turn carries its pixels OUTSIDE the token array (LMInput's
+        // .image part, absolute position ids), so suffix-slicing silently
+        // drops the image and the model sees dangling placeholder tokens.
+        // Correctness first: an image turn always prefills the FULL prepared
+        // input on a fresh cache. (Optimization follow-up: slice with pixels
+        // intact needs positionId rebasing upstream.)
+        #expect(!CrossTurnCacheReuse.suffixReuseAllowed(turnCarriesImages: true))
+        #expect(CrossTurnCacheReuse.suffixReuseAllowed(turnCarriesImages: false))
+    }
 }

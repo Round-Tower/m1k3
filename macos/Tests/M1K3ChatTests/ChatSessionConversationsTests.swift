@@ -10,6 +10,7 @@
 
 import Foundation
 @testable import M1K3Chat
+import M1K3Inference
 import M1K3Knowledge
 import Testing
 
@@ -70,10 +71,15 @@ private final class InMemoryHistoryStore: ChatHistoryPersisting, @unchecked Send
         rows[id] = row
     }
 
+    /// Simulate a DB write failure (the GRDB store's delete runs in
+    /// dbQueue.write and can throw) — the attachment-discard gate probe.
+    var failsDeletes = false
+
     @discardableResult
     func delete(id: UUID) throws -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        if failsDeletes { throw CocoaError(.fileWriteUnknown) }
         return rows.removeValue(forKey: id) != nil
     }
 
@@ -328,6 +334,60 @@ struct ChatSessionConversationsTests {
         #expect(session.activeConversationID == liveID)
         #expect(!session.messages.isEmpty)
         #expect(session.conversationSummaries().map(\.id) == [liveID])
+    }
+
+    @Test("deleting a conversation deletes its attachment files — a removed photo is GONE from disk")
+    func deleteRemovesAttachmentFiles() async throws {
+        // Privacy stance: delete the conversation, and any sensitive photo it
+        // carried leaves the container too (PR #62 round-2 review fold).
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attach-delete-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("secret.png")
+        try Data([0x89]).write(to: file)
+
+        let store = InMemoryHistoryStore()
+        let session = ChatSession(responder: EchoResponder(), history: store)
+        await session.send("hello")
+        let other = UUID()
+        var seeded = completedMessages([("look at this", "nice photo")])
+        seeded[0].attachments = [ImageAttachment(url: file)]
+        store.seed(id: other, title: nil, updatedAt: Date(timeIntervalSince1970: 50),
+                   messages: seeded)
+
+        session.deleteConversation(other)
+
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(session.conversationSummaries().map(\.id) == [session.activeConversationID])
+    }
+
+    @Test("a FAILED row delete keeps the attachment files — never photo-gone-but-row-listed")
+    func failedDeleteKeepsAttachmentFiles() async throws {
+        // The inverse privacy failure (round-3 review): if the DB delete
+        // throws, the conversation stays in the drawer — its thumbnails must
+        // not be broken by an eager file discard.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attach-failed-delete-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("secret.png")
+        try Data([0x89]).write(to: file)
+
+        let store = InMemoryHistoryStore()
+        let session = ChatSession(responder: EchoResponder(), history: store)
+        await session.send("hello")
+        let other = UUID()
+        var seeded = completedMessages([("look", "photo")])
+        seeded[0].attachments = [ImageAttachment(url: file)]
+        store.seed(id: other, title: nil, updatedAt: Date(timeIntervalSince1970: 50),
+                   messages: seeded)
+        store.failsDeletes = true
+
+        session.deleteConversation(other)
+
+        #expect(FileManager.default.fileExists(atPath: file.path))
+        #expect(session.conversationSummaries().contains { $0.id == other })
     }
 
     @Test("deleting the ACTIVE conversation starts a fresh empty one")

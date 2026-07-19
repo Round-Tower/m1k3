@@ -61,6 +61,7 @@ import M1K3Inference
 import MLX
 import MLXLLM
 import MLXLMCommon
+import MLXVLM
 import os
 
 /// Model-load diagnostics. File-scope so the load closure (which runs off the
@@ -237,6 +238,20 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
                         directory: HubApiDownloader.llmDefault.hub
                             .localRepoLocation(Hub.Repo(id: loadConfiguration.name))
                     )
+                    // Route to the factory this checkpoint is proven on. Both
+                    // produce the SAME ModelContainer type, so everything
+                    // downstream (persona prefix, tool sessions, generate) is
+                    // factory-agnostic; the VLM path additionally keeps the
+                    // vision tower resident (image input + future MTP drafter).
+                    if Self.usesVLMLoadPath(for: loadConfiguration) {
+                        return try await VLMModelFactory.shared.loadContainer(
+                            from: HubApiDownloader.llmDefault,
+                            using: TransformersTokenizerLoader(),
+                            configuration: loadConfiguration
+                        ) { prog in
+                            progress(prog.fractionCompleted)
+                        }
+                    }
                     return try await LLMModelFactory.shared.loadContainer(
                         from: HubApiDownloader.llmDefault,
                         using: TransformersTokenizerLoader(),
@@ -607,6 +622,30 @@ extension MLXGemmaProvider {
         // template carries no switch, pinned 2026-07-15).
         return (name.contains("qwen3") && !name.contains("2507"))
             || name.contains("ternary-bonsai-27b")
+    }
+
+    /// Whether the model this provider serves can consume attached images —
+    /// true exactly when it loads through the VLM factory (vision tower
+    /// resident). Read by the tool-session mapping to decide whether images
+    /// ride the chat render or are dropped.
+    public var supportsImageInput: Bool {
+        Self.usesVLMLoadPath(for: ModelConfiguration(id: modelIdentifier))
+    }
+
+    /// Whether this checkpoint loads through VLMModelFactory (vision tower +
+    /// audio embedder resident) instead of MLXLLM's text-only strip.
+    ///
+    /// Exact-id allow-list on purpose (the supportsQuantizedKVCache pattern):
+    /// gemma-4-12B is PROVEN to load + generate under MLXVLM on-device
+    /// (GemmaVisionSpike 2026-07-14, GemmaMTPSpike 2026-07-19 — RAM ≈ the
+    /// text-only load's), and the VLM path is what unlocks image input and,
+    /// once upstream wires Gemma4Unified's MTP entry point, the speculative
+    /// drafter. e4b must NOT route here: upstream's Gemma4Unified sanitize
+    /// lacks the KV-shared-layer fix (e4b has 18 shared layers → keyNotFound
+    /// layers.24.self_attn.v_proj at load; 12B has 0). Unknown ids default to
+    /// the known-good LLM factory.
+    static func usesVLMLoadPath(for configuration: ModelConfiguration) -> Bool {
+        configuration.name.lowercased().contains("gemma-4-12b")
     }
 
     /// Allow-list of families whose attention routes through upstream's

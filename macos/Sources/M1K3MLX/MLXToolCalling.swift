@@ -98,12 +98,19 @@ enum MLXToolMapping {
     /// Map one transcript turn to a `Chat.Message`. Tool results become the
     /// `.tool` role; an assistant turn that made calls echoes them back in the
     /// model's own dialect so the model sees its prior calls in trained form.
-    static func chatMessage(from message: ToolMessage, format: ToolCallFormat = .gemma) -> Chat.Message {
+    static func chatMessage(
+        from message: ToolMessage, format: ToolCallFormat = .gemma, imagesAllowed: Bool = false
+    ) -> Chat.Message {
         switch message {
         case let .system(text):
             return .system(text)
-        case let .user(text):
-            return .user(text)
+        case let .user(text, images):
+            // Images flow ONLY when the backing model is vision-capable
+            // (VLM-loaded gemma-4-12B) — a text-only checkpoint's processor
+            // would choke on (or silently mangle) image parts. Default false
+            // keeps every pre-vision call site byte-identical.
+            guard imagesAllowed, !images.isEmpty else { return .user(text) }
+            return .user(text, images: images.map { .url($0.url) })
         case let .toolResult(_, output):
             // The library's Chat.Message.tool takes only the output text; the
             // model correlates result-to-call by turn order (one result per
@@ -412,6 +419,7 @@ extension MLXGemmaProvider: ToolCallingProvider {
             specs: inputs.specs,
             thinkingContext: thinking.context,
             prefixNeeded: thinking.prefixNeeded,
+            imagesAllowed: supportsImageInput,
             seed: seed
         )
     }
@@ -449,6 +457,9 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
     private let specs: [ToolSpec]?
     private let thinkingContext: [String: any Sendable]?
     private let prefixNeeded: Bool
+    /// Whether this session's model consumes attached images (VLM-loaded).
+    /// False drops images at the chat mapping — text renders identically.
+    private let imagesAllowed: Bool
 
     /// Serial-use contract (why @unchecked is sound): `LocalAgent` is an
     /// actor and `runNativeLoop` awaits each `send` — and calls `finish()`
@@ -480,6 +491,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         specs: [ToolSpec]?,
         thinkingContext: [String: any Sendable]?,
         prefixNeeded: Bool,
+        imagesAllowed: Bool = false,
         seed: PersonaPrefixSnapshot? = nil
     ) {
         self.container = container
@@ -489,6 +501,7 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
         self.specs = specs
         self.thinkingContext = thinkingContext
         self.prefixNeeded = prefixNeeded
+        self.imagesAllowed = imagesAllowed
         kvCache = seed?.cache
         cachedIDs = seed?.tokenIDs ?? []
     }
@@ -512,21 +525,39 @@ final class MLXToolTurnSession: ToolTurnSession, @unchecked Sendable {
             // call + every tool result). A full array always carries the user
             // query, so strict templates never reject it — but we prefill only
             // the suffix past what the live cache already holds.
-            let fullChat = self.transcript.full.map { MLXToolMapping.chatMessage(from: $0, format: format) }
+            let imagesAllowed = self.imagesAllowed
+            let fullChat = self.transcript.full.map {
+                MLXToolMapping.chatMessage(from: $0, format: format, imagesAllowed: imagesAllowed)
+            }
             let prepared = try await context.processor.prepare(
                 input: UserInput(chat: fullChat, tools: self.specs, additionalContext: thinkingContext)
             )
             let fullIDs = prepared.text.tokens.asArray(Int.self)
 
+            // An image anywhere in the render vetoes the suffix fast path:
+            // slicing to raw token ids would drop the pixels (LMInput.image
+            // rides beside the tokens with absolute position ids). The full
+            // prepared input prefills on a fresh cache instead — correct,
+            // just re-prefills the persona. (Also true on iteration 2+ of an
+            // image turn: the image re-encodes each iteration. Optimization
+            // follow-up, not a correctness issue.)
+            let turnCarriesImages = imagesAllowed
+                && self.transcript.full.contains {
+                    if case let .user(_, images) = $0 { return !images.isEmpty }
+                    return false
+                }
+
             let seedCount = self.cachedIDs.count
-            let reuse = CrossTurnCacheReuse.reusableLength(
-                cached: self.cachedIDs, full: fullIDs, hasCache: self.kvCache != nil
-            )
+            let reuse = CrossTurnCacheReuse.suffixReuseAllowed(turnCarriesImages: turnCarriesImages)
+                ? CrossTurnCacheReuse.reusableLength(
+                    cached: self.cachedIDs, full: fullIDs, hasCache: self.kvCache != nil
+                )
+                : 0
             // Diagnose a first-send seed miss: the persona prefix SHOULD be a
             // full prefix of the first render. If reuse falls short, decode the
             // tokens either side of the divergence so the cause is visible (a
             // tool-JSON ordering drift, a persona-text mismatch, …).
-            if self.sendCount == 0, seedCount > 0, reuse < seedCount {
+            if self.sendCount == 0, seedCount > 0, reuse < seedCount, !turnCarriesImages {
                 let window = { (ids: [Int]) -> String in
                     let lo = max(0, reuse - 3), hi = min(ids.count, reuse + 8)
                     return context.tokenizer.decode(tokenIds: Array(ids[lo ..< hi]))

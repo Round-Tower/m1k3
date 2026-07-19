@@ -100,8 +100,15 @@ public enum AFMToolPrompt {
             switch message {
             case .system:
                 continue // lifted to session instructions
-            case let .user(text):
+            case let .user(text, images):
                 lines.append("User: \(text)")
+                // AFM's bridge carries no image path (BrainTier.mini
+                // .supportsImageInput is false, so the UI shouldn't let one
+                // through) — if a turn arrives anyway, tell the model
+                // honestly instead of silently pretending nothing was sent.
+                if !images.isEmpty {
+                    lines.append("(The user attached \(images.count) image(s) this brain cannot view.)")
+                }
             case let .assistant(text, calls):
                 if let text, !text.isEmpty {
                     lines.append("Assistant: \(text)")

@@ -100,6 +100,7 @@ public actor LocalAgent {
     /// baseline that works on any model.
     public func run(
         goal: String,
+        images: [ImageAttachment] = [],
         context groundingContext: String? = nil,
         thinkingEnabled: Bool = true,
         onEvent: (@Sendable (AgentLoopEvent) -> Void)? = nil,
@@ -120,6 +121,7 @@ public actor LocalAgent {
             return try await runNative(
                 provider: toolProvider,
                 goal: goal,
+                images: images,
                 grounding: groundingContext,
                 thinkingEnabled: thinkingEnabled,
                 onEvent: onEvent,
@@ -127,6 +129,12 @@ public actor LocalAgent {
                 onReasoningToken: onReasoningToken
             )
         }
+        // The ReAct floor renders a plain text prompt — images can't ride it,
+        // and this path never touches the image-drop mapping: a floor turn
+        // with images would SILENTLY drop them (no "can't view" note, unlike
+        // the AFM renderer's honesty). Unreachable for a vision turn in
+        // practice — only Big supports images and Big always resolves native
+        // — so the honest-note plumbing waits until a floor model can see.
 
         return try await runReAct(
             goal: goal,

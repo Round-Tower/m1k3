@@ -38,4 +38,17 @@ enum CrossTurnCacheReuse {
     static func cacheReusable(layersTrimmable: [Bool]) -> Bool {
         !layersTrimmable.isEmpty && layersTrimmable.allSatisfy { $0 }
     }
+
+    /// Whether the suffix-reuse fast path may run for this turn. An
+    /// image-carrying turn must NOT: the reuse branch rebuilds the prefill
+    /// input as `LMInput(tokens: fullIDs[reuse...])` — raw token ids — while a
+    /// prepared image turn carries its pixels OUTSIDE the token array
+    /// (`LMInput.image`, absolute position ids). Slicing would silently drop
+    /// the image and leave dangling placeholder tokens. Image turns prefill
+    /// the FULL prepared input on a fresh cache instead — correctness over
+    /// the persona-prefix win. (Follow-up optimization: suffix reuse with
+    /// pixels intact needs positionId rebasing upstream.)
+    static func suffixReuseAllowed(turnCarriesImages: Bool) -> Bool {
+        !turnCarriesImages
+    }
 }

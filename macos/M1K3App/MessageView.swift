@@ -68,6 +68,21 @@ struct MessageView: View {
         switch message.role {
         case .user:
             VStack(alignment: .trailing, spacing: 6) {
+                if let attachments = message.attachments, !attachments.isEmpty {
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 60)
+                        ForEach(attachments, id: \.url) { attachment in
+                            AsyncImage(url: attachment.url) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Color.secondary.opacity(0.2)
+                            }
+                            .frame(width: 120, height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .accessibilityLabel("Attached image")
+                        }
+                    }
+                }
                 HStack {
                     Spacer(minLength: 60)
                     bubble

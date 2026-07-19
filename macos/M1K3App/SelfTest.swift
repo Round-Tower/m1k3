@@ -426,6 +426,17 @@ enum SelfTest {
             await runGemmaMTPSpike()
         }
 
+        // 11. Optional vision-chat probe (M1K3_SELFTEST_VISIONCHAT=1 +
+        //     M1K3_SELFTEST_VISIONCHAT_IMAGE=<path>): an image through the
+        //     REAL live path — AgentRAGResponder → LocalAgent native loop →
+        //     MLXToolTurnSession → VLM-loaded Big — i.e. exactly what the
+        //     composer's attach button sends. Proves the whole image seam
+        //     (ToolMessage images → chat mapping → processor pixels) end to
+        //     end, not just the spike-level ChatSession path.
+        if SelfTestEnv.value("M1K3_SELFTEST_VISIONCHAT") == "1" {
+            await runVisionChatProbe()
+        }
+
         emit("=== END SELF-TEST ===")
     }
 
@@ -452,6 +463,47 @@ enum SelfTest {
             emit(result.ramSnapshot)
         } catch {
             emit("✗ vision spike: \(error)")
+        }
+    }
+
+    /// The vision-chat probe: one image + question through the production
+    /// responder stack on Big. Empty in-memory store (closed book), the
+    /// canned tool palette — the live-path CHATEVAL shape, plus an image.
+    private static func runVisionChatProbe() async {
+        guard let imagePath = SelfTestEnv.value("M1K3_SELFTEST_VISIONCHAT_IMAGE") else {
+            emit("✗ visionchat: M1K3_SELFTEST_VISIONCHAT_IMAGE not set")
+            return
+        }
+        let modelID = SelfTestEnv.value("M1K3_SELFTEST_VISIONCHAT_MODEL")
+            ?? BrainTier.big.mlxModelID ?? ""
+        emit("• visionchat: \(modelID) + \(imagePath) through AgentRAGResponder…")
+        do {
+            let provider = MLXGemmaProvider(modelID: modelID, name: "visionchat")
+            let store = try KnowledgeStore()
+            let responder = AgentRAGResponder(
+                store: store, embedder: MLXEmbeddingService(), provider: provider,
+                toolsProvider: { [] }, maxIterations: 3
+            )
+            let attachment = ImageAttachment(url: URL(fileURLWithPath: imagePath))
+            let clock = ContinuousClock()
+            let start = clock.now
+            let (_, stream) = try await responder.answerStreaming(
+                "In one or two short sentences, describe what you see in this image.",
+                images: [attachment],
+                history: [],
+                onActivity: { _ in }
+            )
+            var answer = ""
+            for await piece in stream {
+                answer += piece
+            }
+            let ms = milliseconds(clock.now - start)
+            let cleaned = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            emit(cleaned.isEmpty
+                ? "✗ visionchat: EMPTY answer (\(ms)ms)"
+                : "✓ visionchat (\(ms)ms): \(cleaned.prefix(300))")
+        } catch {
+            emit("✗ visionchat: \(error)")
         }
     }
 

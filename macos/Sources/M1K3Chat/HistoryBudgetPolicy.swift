@@ -77,6 +77,14 @@ public enum HistoryBudgetPolicy {
         totalChars: 3000, perTurnChars: 750, maxTurns: 8
     )
 
+    /// Replay chars surrendered per attached image: an image's vision soft
+    /// tokens ride the SAME window as everything else, and the only tier
+    /// that sees images (Big) is the one whose rotating cache overflows
+    /// SILENTLY. ~265 prompt tokens/image measured on gemma-4-12B
+    /// (GemmaVisionSpike, 2026-07-14); 300 tokens × charsPerToken is the
+    /// conservative reserve. Review fold, PR #62.
+    public static let imageReserveCharsPerImage = Int(300 * charsPerToken)
+
     /// The replay budget for a tier, reserving room for the fixed prompt (persona
     /// + tools + grounding + goal, in `reservedTokens`) and the generation
     /// headroom (`generationTokens`). On a rotating-KV tier the result is
