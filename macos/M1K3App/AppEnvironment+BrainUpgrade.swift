@@ -38,6 +38,7 @@
 //  ints replace the dismissal bool; the state machine is unchanged — the park
 //  decision arrives through its existing recompute input.
 
+import AppKit
 import Foundation
 import M1K3Inference
 import M1K3MLX
@@ -252,6 +253,12 @@ extension AppEnvironment {
                 if self.isBrainDownloaded(target) {
                     Self.upgradeLog.notice("background upgrade staged: \(modelID, privacy: .public)")
                     self.brainUpgrade = BrainUpgradePolicy.transition(self.brainUpgrade, on: .fetchSucceeded)
+                    // The whole point of the background fetch is you've moved on —
+                    // ping that it's downloaded (background-only, opt-in).
+                    await self.maybeNotifyDownloadComplete(
+                        modelName: target.displayName,
+                        appActive: NSApplication.shared.isActive
+                    )
                     self.attemptAutoSwapIfStaged()
                 } else {
                     self.handleFetchFailure(attempt: attempt, transient: true,

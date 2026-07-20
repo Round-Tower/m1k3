@@ -18,6 +18,11 @@ import Foundation
 /// A named UI sound. The raw value is stable identity; `resourceName` is the
 /// bundled WAV that voices it (decoupled so a sound can be re-cast without
 /// touching call sites).
+///
+/// Mostly short one-shot earcons — with one deliberate exception: `dialup` is a
+/// SUSTAINED "connecting…" sound played on a loop while a model downloads/loads
+/// (start/stop via `SoundEffectPlayer.startLoop`/`stopLoop`), not a fire-and-
+/// forget blip. It still rides the same on/off toggle and player.
 public enum SoundEffect: String, CaseIterable, Sendable {
     /// Something failed — a turn errored, a tool died.
     case error
@@ -25,6 +30,9 @@ public enum SoundEffect: String, CaseIterable, Sendable {
     case save
     /// Voice mode came alive — M1K3 materialising.
     case voiceEnter
+    /// Sustained modem-handshake "connecting…" — looped while a model
+    /// downloads/loads. Nostalgic dial-up; stops the moment the brain's ready.
+    case dialup
 
     /// The bundled WAV (in `SoundEffects/`) that voices this effect.
     var resourceName: String {
@@ -32,6 +40,7 @@ public enum SoundEffect: String, CaseIterable, Sendable {
         case .error: "badBoing"
         case .save: "coin"
         case .voiceEnter: "materialise"
+        case .dialup: "dialup"
         }
     }
 }

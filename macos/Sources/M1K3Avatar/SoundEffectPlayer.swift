@@ -29,25 +29,59 @@ public enum SoundGate {
 @MainActor
 public final class SoundEffectPlayer {
     /// The user's Settings preference, read live so a toggle applies at once.
-    public var isEnabled: Bool
+    /// Muting also silences any in-flight loop immediately — a user who turns
+    /// sound off mid-download shouldn't have to wait out the modem screech.
+    public var isEnabled: Bool {
+        didSet {
+            guard !isEnabled, !looping.isEmpty else { return }
+            for effect in looping {
+                loopSink(effect, false)
+            }
+            looping.removeAll()
+        }
+    }
+
     private let isSpeaking: @MainActor () -> Bool
     private let sink: @MainActor (SoundEffect) -> Void
+    /// Start (`true`) / stop (`false`) a sustained looping sound.
+    private let loopSink: @MainActor (SoundEffect, Bool) -> Void
+    /// Effects currently looping — so a mute can stop them, and a stop is idempotent.
+    private var looping: Set<SoundEffect> = []
 
-    /// Designated init — `sink` performs the actual playback. Injectable so the
-    /// policy is testable without touching CoreAudio.
+    /// Designated init — `sink` performs one-shot playback, `loopSink` starts/
+    /// stops a sustained loop. Both injectable so the policy is testable without
+    /// touching CoreAudio.
     public init(
         isEnabled: Bool,
         isSpeaking: @escaping @MainActor () -> Bool,
-        sink: @escaping @MainActor (SoundEffect) -> Void
+        sink: @escaping @MainActor (SoundEffect) -> Void,
+        loopSink: @escaping @MainActor (SoundEffect, Bool) -> Void = { _, _ in }
     ) {
         self.isEnabled = isEnabled
         self.isSpeaking = isSpeaking
         self.sink = sink
+        self.loopSink = loopSink
     }
 
     public func play(_ effect: SoundEffect) {
         guard SoundGate.allows(enabled: isEnabled, isSpeaking: isSpeaking()) else { return }
         sink(effect)
+    }
+
+    /// Begin a sustained looping sound (the dial-up "connecting…" hum). Gated
+    /// like `play`: only when enabled and M1K3 isn't speaking. Idempotent — a
+    /// second start while already looping is a no-op.
+    public func startLoop(_ effect: SoundEffect) {
+        guard SoundGate.allows(enabled: isEnabled, isSpeaking: isSpeaking()) else { return }
+        guard looping.insert(effect).inserted else { return }
+        loopSink(effect, true)
+    }
+
+    /// Stop a sustained sound. NOT gated — a stop must always land (e.g. the
+    /// load finished) even if the effect was never started; then it's a no-op.
+    public func stopLoop(_ effect: SoundEffect) {
+        guard looping.remove(effect) != nil else { return }
+        loopSink(effect, false)
     }
 }
 
@@ -61,9 +95,12 @@ public extension SoundEffectPlayer {
         isSpeaking: @escaping @MainActor () -> Bool
     ) -> SoundEffectPlayer {
         let pool = AVAudioEarconPool(volume: volume)
-        return SoundEffectPlayer(isEnabled: isEnabled, isSpeaking: isSpeaking) { effect in
-            pool.play(effect)
-        }
+        return SoundEffectPlayer(
+            isEnabled: isEnabled,
+            isSpeaking: isSpeaking,
+            sink: { effect in pool.play(effect) },
+            loopSink: { effect, start in pool.loop(effect, start: start) }
+        )
     }
 }
 
@@ -94,7 +131,23 @@ private final class AVAudioEarconPool {
 
     func play(_ effect: SoundEffect) {
         guard let player = players[effect] else { return }
+        player.numberOfLoops = 0
         player.currentTime = 0
         player.play()
+    }
+
+    /// Start (`start: true`) or stop a sustained looped playback. Resets
+    /// `numberOfLoops` to 0 on stop so a later one-shot `play` isn't infinite.
+    func loop(_ effect: SoundEffect, start: Bool) {
+        guard let player = players[effect] else { return }
+        if start {
+            player.numberOfLoops = -1
+            player.currentTime = 0
+            player.play()
+        } else {
+            player.stop()
+            player.numberOfLoops = 0
+            player.currentTime = 0
+        }
     }
 }

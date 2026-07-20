@@ -43,9 +43,27 @@ enum TurnNotifier {
     /// Post the generic "answer ready" notification. No content preview by design
     /// (privacy). The center silently drops it if authorization was never granted.
     static func notifyTurnFinished() async {
+        await post(title: "M1K3 has your answer", body: "Your reply is ready.")
+    }
+
+    /// A model finished downloading in the background — ready to switch to. The
+    /// model NAME is not private (it's a public model id), so it's safe to show,
+    /// unlike a turn's content.
+    static func notifyDownloadComplete(modelName: String) async {
+        await post(title: "Download complete", body: "\(modelName) is downloaded and ready to load.")
+    }
+
+    /// A model finished loading and M1K3 can now answer with it.
+    static func notifyModelReady(modelName: String) async {
+        await post(title: "M1K3 is ready", body: "\(modelName) has finished loading.")
+    }
+
+    /// Shared post path — generic content, no trigger (immediate). The center
+    /// silently drops it if authorization was never granted.
+    private static func post(title: String, body: String) async {
         let content = UNMutableNotificationContent()
-        content.title = "M1K3 has your answer"
-        content.body = "Your reply is ready."
+        content.title = title
+        content.body = body
         content.sound = .default
         let request = UNNotificationRequest(
             identifier: UUID().uuidString, content: content, trigger: nil
@@ -66,6 +84,13 @@ extension AppEnvironment {
 
     var notifyOnLongTurnEnabled: Bool {
         UserDefaults.standard.bool(forKey: Self.notifyOnLongTurnKey)
+    }
+
+    /// The same opt-in also gates the model-lifecycle pings (download complete,
+    /// model ready) — one "notify me" switch, one system permission grant. Named
+    /// separately so the call sites read honestly rather than "longTurn".
+    var notificationsEnabled: Bool {
+        notifyOnLongTurnEnabled
     }
 
     /// Flip the opt-in. Turning it ON requests authorization first and only
@@ -92,5 +117,21 @@ extension AppEnvironment {
             enabled: notifyOnLongTurnEnabled
         ) else { return }
         await TurnNotifier.notifyTurnFinished()
+    }
+
+    /// Ping when a background model download finishes — only if opted in AND the
+    /// app is backgrounded (you don't need a banner if you're watching the bar).
+    /// No duration threshold: unlike a turn, "done" is always worth surfacing.
+    /// `appActive` is read by the @MainActor caller, same explicit-dependency
+    /// stance as `maybeNotifyTurnFinished`.
+    func maybeNotifyDownloadComplete(modelName: String, appActive: Bool) async {
+        guard notificationsEnabled, !appActive else { return }
+        await TurnNotifier.notifyDownloadComplete(modelName: modelName)
+    }
+
+    /// Ping when a model finishes loading and is ready to answer — same gate.
+    func maybeNotifyModelReady(modelName: String, appActive: Bool) async {
+        guard notificationsEnabled, !appActive else { return }
+        await TurnNotifier.notifyModelReady(modelName: modelName)
     }
 }

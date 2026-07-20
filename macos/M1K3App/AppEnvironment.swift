@@ -933,6 +933,13 @@ final class AppEnvironment {
         // the current selection (the didSet, or a newer warm-up) owns modelLoad,
         // so a late-completing cancelled task can't clobber it.
         modelLoad = .progress(0)
+        // Dial-up "connecting…" hum only when weights aren't already cached —
+        // i.e. a real download the user waits through, not the silent launch
+        // re-warm of a brain already on disk (no modem screech on every launch).
+        // The defer guarantees it stops on every exit: ready, cancel, or error.
+        let willDownload = !isBrainDownloaded(selectedBrain)
+        if willDownload { soundEffects.startLoop(.dialup) }
+        defer { soundEffects.stopLoop(.dialup) }
         let mlx = currentMLXProvider
         do {
             try await mlx.prepare { fraction in
@@ -954,6 +961,15 @@ final class AppEnvironment {
             }
             if Task.isCancelled { return }
             modelLoad = .ready
+            // Ping "ready" only after a real download/load (not a cached warm),
+            // and only if you've tabbed away — the same background-only gate as
+            // the long-turn ping. appActive read here on the main actor.
+            if willDownload {
+                await maybeNotifyModelReady(
+                    modelName: selectedBrain.displayName,
+                    appActive: NSApplication.shared.isActive
+                )
+            }
             warmPersonaPrefixAfterLoad(mlx)
         } catch is CancellationError {
             // Deliberately switched away mid-load — leave modelLoad to the current

@@ -32,17 +32,18 @@ struct GeneralSettingsPane: View {
             startupSection
 
             Section {
-                Toggle("Notify when a long answer is ready", isOn: $notifyOnLongTurn)
+                Toggle("Notify me in the background", isOn: $notifyOnLongTurn)
                     .onChange(of: notifyOnLongTurn) { _, on in
                         Task { await env.setLongTurnNotifications(on) }
                     }
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("If you tab away mid-answer, M1K3 pings you when a long reply "
-                    + "is ready — only while the app is in the background. The "
-                    + "notification never includes the reply itself: on-device, "
-                    + "private. Off by default.")
+                Text("When you tab away, M1K3 pings you as things finish — a long "
+                    + "reply is ready, a brain finishes downloading, or a brain is "
+                    + "loaded and ready. Only while the app is in the background, "
+                    + "and never with the reply itself: on-device, private. Off by "
+                    + "default.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -55,8 +56,9 @@ struct GeneralSettingsPane: View {
                 Text("Sound effects")
             } footer: {
                 Text("Short earcons for a few moments — an error, a memory saved, "
-                    + "voice mode waking up. They never play over M1K3's voice. "
-                    + "On-device only.")
+                    + "voice mode waking up — plus a nostalgic dial-up \u{201C}connecting\u{201D} "
+                    + "sound while a brain downloads or loads. They never play over "
+                    + "M1K3's voice. On-device only.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

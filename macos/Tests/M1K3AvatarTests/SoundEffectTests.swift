@@ -11,9 +11,9 @@
 import Testing
 
 struct SoundEffectTests {
-    @Test("the catalogue is the v1 earcon set")
+    @Test("the catalogue is the earcon set plus the dial-up loop")
     func catalogue() {
-        #expect(Set(SoundEffect.allCases) == [.error, .save, .voiceEnter])
+        #expect(Set(SoundEffect.allCases) == [.error, .save, .voiceEnter, .dialup])
     }
 
     @Test("each effect names a distinct resource")
