@@ -134,14 +134,20 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
                 if let list {
                     webView.configuration.userContentController.add(list)
                     webView.loadHTMLString(source, baseURL: nil)
+                    // Breadcrumb on the SUCCESS path too. Without it, an empty
+                    // `artifact-preview` log is ambiguous: it means either "the seal
+                    // never failed" or "no artifact was ever previewed", and those
+                    // demand opposite next moves. `.notice` because `.info`/`.debug`
+                    // do not persist in OSLogStore.
+                    Self.logger.notice("artifact preview sealed and loaded (\(source.count, privacy: .public) bytes)")
                 } else {
                     // Fail CLOSED: if the seal won't compile, do NOT load the content with
                     // only the navigation delegate (which does not see sub-resource loads).
                     // Show an honest placeholder instead of a silently un-sealed preview.
                     Self.logger.error(
-                        "artifact preview seal failed to compile; refusing to load unsealed content: \(String(describing: error), privacy: .public)"
+                        "\(ArtifactFallback.diagnosticCode, privacy: .public) artifact preview seal failed to compile; refusing to load unsealed content: \(String(describing: error), privacy: .public)"
                     )
-                    webView.loadHTMLString(Self.sealFailureHTML, baseURL: nil)
+                    webView.loadHTMLString(ArtifactFallback.sealFailureHTML, baseURL: nil)
                 }
             }
         }
@@ -150,10 +156,6 @@ private struct ArtifactPreviewWebView: NSViewRepresentable {
     }
 
     private static let logger = Logger(subsystem: "app.m1k3", category: "artifact-preview")
-
-    private static let sealFailureHTML =
-        "<html><body style=\"font-family:-apple-system;color:#888;padding:2rem\">"
-            + "Preview unavailable — the content sandbox could not be initialised.</body></html>"
 
     func updateNSView(_: WKWebView, context _: Context) {
         // source is immutable (let); identity is managed by .id(artifact.createdAt) in the parent.
@@ -192,4 +194,67 @@ struct ArtifactDocument: FileDocument {
         }
         return FileWrapper(regularFileWithContents: data)
     }
+}
+
+// MARK: - Previews
+
+//
+// ArtifactView is one of the cheapest views in the app to preview: it needs only
+// M1K3Preview (a pure module) + WebKit, no AppEnvironment, no model, no MLX. That
+// makes the canvas the fastest way to iterate on the house sheet — a CSS change
+// and a redraw, instead of ⌘R and a chat turn that happens to emit an artifact.
+//
+// These deliberately include the FAILURE state. A failure you can only reach by
+// breaking the sandbox at runtime is a failure nobody reviews, which is how the
+// old white-page placeholder survived as long as it did.
+
+#Preview("HTML artifact — the house sheet") {
+    ArtifactView(artifact: CodeArtifact(
+        source: """
+        <h1>Tide Tables</h1>
+        <p>An unstyled semantic document. Everything below is plain HTML — no
+        classes, no framework — so what you see is the house sheet doing its job.</p>
+        <h2>Method</h2>
+        <p>Readings were taken hourly. The second paragraph should carry a LaTeX-style
+        indent, and this prose should be justified and hyphenated on a comfortable measure.</p>
+        <table>
+          <thead><tr><th>Hour</th><th>Height</th></tr></thead>
+          <tbody><tr><td>06:00</td><td>1.2 m</td></tr><tr><td>12:00</td><td>3.4 m</td></tr></tbody>
+        </table>
+        """,
+        language: .html,
+        title: "Tide Tables"
+    ))
+    .frame(width: 760, height: 620)
+}
+
+#Preview("Markdown artifact") {
+    ArtifactView(artifact: CodeArtifact(
+        source: "# Notes\n\nMarkdown rides the *same* sheet — one design language.\n",
+        language: .markdown,
+        title: "Notes",
+        previewSource: ArtifactFormatter.formatMarkdown("# Notes\n\nMarkdown rides the *same* sheet — one design language.\n")
+    ))
+    .frame(width: 760, height: 620)
+}
+
+#Preview("Code artifact — opens to source, no Preview tab") {
+    ArtifactView(artifact: CodeArtifact(
+        source: "def tide(hour: int) -> float:\n    return 1.2 if hour < 9 else 3.4\n",
+        language: .code,
+        title: "tide",
+        languageLabel: "python"
+    ))
+    .frame(width: 760, height: 620)
+}
+
+#Preview("Seal failure — what a fail-closed preview looks like") {
+    // Renders the placeholder directly rather than sabotaging the sandbox, so the
+    // failure state is reviewable design work like any other screen.
+    ArtifactView(artifact: CodeArtifact(
+        source: ArtifactFallback.sealFailureHTML,
+        language: .html,
+        title: "Preview held back"
+    ))
+    .frame(width: 760, height: 620)
 }
