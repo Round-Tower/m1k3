@@ -59,12 +59,14 @@ struct BrainPickerView: View {
         // clipped behind a resize.
         ScrollView {
             VStack(spacing: 24) {
+                Spacer()
                 header(
                     title: "Brain",
                     subtitle: isWakingBrain ? "Configuring M1K3's mainframe" : "Pick a brain"
                 )
 
                 if isWakingBrain { brainAwakening } else { brainPicker }
+                Spacer()
             }
             .padding(32)
             .frame(maxWidth: .infinity)
@@ -138,10 +140,6 @@ struct BrainPickerView: View {
             }
             .buttonStyle(.glassProminent)
             .padding(.top, 4)
-
-            Text("On-device only. Your conversations never leave this Mac.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 

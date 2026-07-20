@@ -125,13 +125,12 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     public var detail: String {
         switch self {
         case .mini:
-            "Apple's built-in on-device model. Instant, private, and always ready — "
-                + "no download. The quickest way to start."
+            "Apple's built-in on-device model. "
+                + "No download. The quickest way to start."
         case .lil:
             Self.lilDetail
         case .big:
-            "Maximum capability for most Macs — deeper reasoning and longer "
-                + "context, fully local. The full M1K3."
+            "Maximum capability, fully local. The full M1K3."
         }
     }
 
@@ -140,7 +139,7 @@ public enum BrainTier: String, CaseIterable, Identifiable, Sendable, Comparable 
     /// 2026-07-18; consolidated onto HostPlatform same-day — macOS bytes frozen,
     /// pinned in BrainTierTests).
     private static var lilDetail: String {
-        "A downloaded local engine — multi-turn conversation, memory, and "
+        "A fully local engine — multi-turn conversation, memory, and "
             + "reasoning that keeps up with you. Runs entirely on \(HostPlatform.yourDevice)."
     }
 
