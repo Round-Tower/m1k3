@@ -1,5 +1,9 @@
 # M1K3 — Mac-Native MVP
 
+> **For "what's next," see `ROADMAP.md`.** This file is the historical build
+> log / decision record — append-only, signed, kept exactly as written. It
+> answers *why* a decision was made; it's no longer where current work is tracked.
+
 ## Context
 
 M1K3 today exists as a Python desktop CLI + MCP servers and a Kotlin Multiplatform mobile app (Android shipping, iOS a shell). **There is no Mac-native app.** This plan builds one: a native SwiftUI macOS app that is M1K3's first-class desktop surface — a local, private AI companion with live voice, a knowledge graph, document memory, an embedded agent, and an MCP server so Claude (and other agents) can pull from it.

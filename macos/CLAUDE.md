@@ -16,9 +16,11 @@ distinct surface from the KMP `../app/` (that's the Android effort).
 The parent `../CLAUDE.md` documents the **legacy Python CLI** (archived under
 `../attic/`, last meaningful work Jan 2026). When working under `macos/`, this
 file is the relevant one. Durable session history lives in
-`../.claude/project-memory.md` (read it for in-flight threads and hard-won gotchas);
-the roadmap is `PLAN.md` (append-only, signed — reconcile additively, never rewrite
-signed blocks).
+`../.claude/project-memory.md` (read it for in-flight threads and hard-won gotchas).
+**`ROADMAP.md` is the current "what's next" doc** — kept live, not append-only.
+`PLAN.md` is the historical build log / decision record (append-only, signed —
+reconcile additively, never rewrite signed blocks); read it for *why* a decision
+was made, not for what's next.
 
 ## Build & Test
 
