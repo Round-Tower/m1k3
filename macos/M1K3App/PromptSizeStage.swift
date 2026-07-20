@@ -76,6 +76,21 @@
 //  from the prior signature; this review fixed WHAT gets measured, not
 //  whether it has been yet).
 //
+//  Review: Kev + claude-fable-5, 2026-07-20 (later), Confidence 0.85 — Kev ran
+//  the fixed instrument on-device (gemma-4-12B): the seed fix above works
+//  (persona+tools (KV-seed) = 1380 tok showed up), but grounded-Q measured
+//  BYTE-IDENTICAL to open-chat — no KNOWLEDGE block at all. Root cause: this
+//  stage seeded the corpus AND ran the responder with `HashingEmbeddingService`,
+//  whose embeddings aren't semantic, so retrieval cleared nothing and the
+//  deliberate worst-case injection (the whole reason grounded-Q +
+//  `seedWorstCaseCorpus` exist) never fired. Both call sites now use
+//  `MLXEmbeddingService` (matching `ChatEvalStage.livePathObservation`'s
+//  real-embedder pattern) so retrieval actually happens. Separately, folding
+//  the 0-byte KV-seed/template tokens into `measuredCharsPerToken` was
+//  tanking it to ~1.1 — a scary-looking artifact, not a real under-
+//  reservation signal — fixed in `PromptSizeReport` (TDD'd; see that file's
+//  own Review line).
+//
 
 import Foundation
 import M1K3Agent
@@ -220,11 +235,16 @@ enum PromptSizeStage {
     /// Documents seeded before the sized turns, so retrieval actually fires.
     /// Chunks are deliberately built at DocumentChunker.targetChars (1200) —
     /// the WORST CASE the live path can inject, which is the number the
-    /// ~1100-token reserve has to survive.
+    /// ~1100-token reserve has to survive. MUST use the SAME real embedder the
+    /// responder searches with (`MLXEmbeddingService`, not `HashingEmbeddingService`)
+    /// — a hashing embedding isn't semantic, so a query/doc pair that should
+    /// match under real retrieval clears nothing and the worst-case injection
+    /// this whole fixture exists to exercise never lands in the prompt (found
+    /// live: grounded-Q measured byte-identical to open-chat).
     private static func seedWorstCaseCorpus(into store: KnowledgeStore) async throws {
         let filler = String(repeating: "The hydraulic seal failed under load. ", count: 32)
         for index in 1 ... 6 {
-            let ingester = DocumentIngester(store: store, embedder: HashingEmbeddingService())
+            let ingester = DocumentIngester(store: store, embedder: MLXEmbeddingService())
             _ = try await ingester.ingest(
                 title: "Plant Notes \(index)",
                 text: "3.\(index) Seals\n\(filler.prefix(DocumentChunker.targetChars))"
@@ -253,7 +273,9 @@ enum PromptSizeStage {
                 }
                 let responder = AgentRAGResponder(
                     store: store,
-                    embedder: HashingEmbeddingService(),
+                    // Real embedder, matching the ingester above — retrieval must
+                    // actually fire for grounded-Q's worst-case corpus to be found.
+                    embedder: MLXEmbeddingService(),
                     provider: RecordingProvider(wrapped: provider, recorder: recorder),
                     // The REAL production palette (same one ChatEvalStage's tool-use
                     // fixtures probe) — an empty list both forced the ReAct floor

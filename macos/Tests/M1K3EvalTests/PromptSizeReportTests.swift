@@ -12,6 +12,12 @@
 //  rendering; the on-device numbers this consumes are the verify-owed).
 //  Prior: Unknown
 //
+//  Review: Kev + claude-fable-5, 2026-07-20, Confidence 0.85 — added the two
+//  structural-component directions an on-device run exposed:
+//  `measuredCharsPerTokenExcludesStructuralComponents` (0-byte KV-seed/template
+//  tokens must not tank the ratio) and `measuredCharsPerTokenNilWhenAllStructural`
+//  (an all-structural measurement has no text to calibrate against — nil, not 0.0).
+//
 
 @testable import M1K3Eval
 import Testing
@@ -132,6 +138,35 @@ struct PromptSizeReportTests {
             reserveTokens: nil, windowTokens: nil
         )
         #expect(m.measuredCharsPerToken == 4.0)
+    }
+
+    @Test("measuredCharsPerToken ignores 0-byte structural components (KV-seed, template)")
+    func measuredCharsPerTokenExcludesStructuralComponents() {
+        // The persona+tools KV-seed (native path) and the "template" wrapper
+        // attribution are both real tokens with NO paired bytes — they were
+        // never rendered as text of their own. Folding them into the ratio
+        // tanks it toward ~1.1 and reads like a scary under-reservation; the
+        // ratio is a TEXT-calibration figure, so only rendered text counts.
+        let m = PromptSizeMeasurement(
+            label: "big",
+            components: [
+                component("persona+tools (KV-seed)", bytes: 0, tokens: 1380),
+                component("preamble", bytes: 2056, tokens: 469),
+                component("template", bytes: 0, tokens: 14),
+            ],
+            reserveTokens: nil, windowTokens: nil
+        )
+        #expect(m.measuredCharsPerToken == Double(2056) / Double(469))
+    }
+
+    @Test("measuredCharsPerToken is nil when every component is structural (0 bytes)")
+    func measuredCharsPerTokenNilWhenAllStructural() {
+        let m = PromptSizeMeasurement(
+            label: "seed-only",
+            components: [component("persona+tools (KV-seed)", bytes: 0, tokens: 1380)],
+            reserveTokens: nil, windowTokens: nil
+        )
+        #expect(m.measuredCharsPerToken == nil)
     }
 
     @Test("measuredCharsPerToken is nil when tokens are unknown or zero")

@@ -29,6 +29,18 @@
 //  and inclusive-boundary directions; the on-device numbers it consumes are the
 //  named verify-owed). Prior: Unknown
 //
+//  Review: Kev + claude-fable-5, 2026-07-20, Confidence 0.85 — an on-device run
+//  (gemma-4-12B) showed `measuredCharsPerToken` reading ~1.1: the 0-byte
+//  `persona+tools (KV-seed)`/`template` components (real tokens, never
+//  rendered as text) were folding into the ratio and tanking it, making a
+//  ~4.4 real-text ratio look like a scary under-reservation. Fixed red-first
+//  (`measuredCharsPerTokenExcludesStructuralComponents` /
+//  `measuredCharsPerTokenNilWhenAllStructural` in PromptSizeReportTests):
+//  the ratio now sums bytes/tokens over ONLY components with `bytes > 0`.
+//  `totalTokens`/`exceedsReserve`/`contextFraction` are UNTOUCHED — the seed
+//  is real KV context and must still count toward the reserve/window fit;
+//  only the text-calibration ratio excludes structural, textless tokens.
+//
 
 import Foundation
 
@@ -106,17 +118,27 @@ public struct PromptSizeMeasurement: Sendable, Equatable {
     /// The ratio the char≈token estimates should be tuned to for this corpus —
     /// the [SPIKE] figure. nil when unmeasurable.
     ///
-    /// Conservative by construction, not exact: components like "template"
-    /// (and "persona+tools (KV-seed)" on Big's native path) pair real tokens
-    /// with `bytes: 0` — they were never rendered as text of their own — so
-    /// they inflate `totalTokens` without inflating `totalBytes`. The ratio
-    /// therefore reads a little LOWER than the prose alone would produce; a
-    /// chars/token estimate calibrated off it is biased toward reserving
-    /// slightly MORE tokens for a given byte count, which is the safe
-    /// direction for a figure that feeds a context-budget reserve.
+    /// A TEXT-calibration figure, deliberately over ONLY the components that
+    /// were actually rendered as text: "template" (the chat-template wrapper's
+    /// attributed cost) and "persona+tools (KV-seed)" (Big's native persona
+    /// prefix, prefilled straight into the KV cache and never a string at
+    /// all) both pair real tokens with `bytes: 0` — including them tanks the
+    /// ratio to ~1.1 (live: a 469-token/2056-byte prompt read as 1.11 once its
+    /// 1380-token 0-byte seed was folded in), which reads like a scary
+    /// under-reservation that isn't real. `totalTokens` and the reserve-fit
+    /// check are UNCHANGED by this exclusion — the seed is real KV context and
+    /// must still count toward "does this fit the window/reserve"; only the
+    /// chars/token calibration figure ignores structural, textless tokens.
     public var measuredCharsPerToken: Double? {
-        guard let totalTokens, totalTokens > 0 else { return nil }
-        return Double(totalBytes) / Double(totalTokens)
+        var textBytes = 0
+        var textTokens = 0
+        for component in components where component.bytes > 0 {
+            guard let tokens = component.tokens else { return nil }
+            textBytes += component.bytes
+            textTokens += tokens
+        }
+        guard textTokens > 0 else { return nil }
+        return Double(textBytes) / Double(textTokens)
     }
 }
 
