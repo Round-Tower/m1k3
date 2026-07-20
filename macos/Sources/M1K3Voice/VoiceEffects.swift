@@ -7,6 +7,11 @@
 //  unit-tested.
 //
 //  Signed: Kev + claude-sonnet-4-6, 2026-06-08, Confidence 0.8, Prior: Unknown
+//  Review: Kev + Claude, 2026-07-19 — BandpassEffect is now a cascaded Butterworth
+//  HPF+LPF (near-unity passband) instead of a single constant-skirt biquad whose peak
+//  gain ≈ Q ≈ 0.33 scooped the whole band ~10 dB and starved the compressor after it.
+//  CompressionEffect doc corrected: it's an instantaneous per-sample soft-clip, not an
+//  envelope compressor. Pinned by bandpassPassbandNearUnity + compressorEngagesAfterNormalise.
 
 import Foundation
 
@@ -28,8 +33,12 @@ public struct NormalizationEffect: VoiceEffect {
     }
 }
 
-/// Soft-knee compressor: amplitudes above `threshold` are pulled in by `ratio`.
-/// Port of CompressionEffect.
+/// Instantaneous (per-sample) soft-clip: amplitudes above `threshold` have their
+/// excess scaled by `ratio` — so `ratio` is the slope above the knee (0.4 ≈ a
+/// 2.5:1 curve), not a conventional attack/release compressor. It shapes waveform
+/// peaks (adding gentle harmonic "grit"), it does not track an envelope. Needs the
+/// signal to actually reach `threshold` to do anything — the preset normalises up
+/// into it first (see `m1k3Character`). Port of CompressionEffect.
 public struct CompressionEffect: VoiceEffect {
     public let name = "compression"
     public let threshold: Float
@@ -50,9 +59,14 @@ public struct CompressionEffect: VoiceEffect {
     }
 }
 
-/// A second-order (biquad) bandpass — the "intercom"/telephone band that gives the
-/// voice its transmitted character. RBJ cookbook coefficients, Direct Form I.
-/// Port of IntercomEffect, implemented as a stable single-pass IIR filter.
+/// The "intercom"/telephone band that gives the voice its transmitted character —
+/// a genuine band limit, not a scoop. Two cascaded RBJ biquads (Butterworth
+/// Q = 1/√2): a high-pass at `lowFrequency` and a low-pass at `highFrequency`,
+/// giving a flat-ish passband with 12 dB/oct skirts and near-unity gain THROUGH
+/// the band. (The earlier single constant-skirt bandpass had peak gain ≈ Q ≈ 0.33,
+/// i.e. it attenuated the whole band by ~10 dB — the level then had to be clawed
+/// back downstream, and it starved the compressor that followed it.)
+/// Port of IntercomEffect; each biquad is a stable Direct Form I IIR pass.
 public struct BandpassEffect: VoiceEffect {
     public let name = "bandpass"
     public let lowFrequency: Double
@@ -65,25 +79,54 @@ public struct BandpassEffect: VoiceEffect {
 
     public func apply(to samples: [Float], sampleRate: Double) -> [Float] {
         guard sampleRate > 0, !samples.isEmpty else { return samples }
-        // Geometric centre + bandwidth → RBJ bandpass (constant skirt gain).
-        let centre = (lowFrequency * highFrequency).squareRoot()
-        let bandwidth = max(highFrequency - lowFrequency, 1)
-        let quality = centre / bandwidth
+        // Keep both corners inside (0, Nyquist) and low < high, so the coefficients
+        // stay well-defined even for odd sample rates / mis-ordered inits.
+        let nyquist = sampleRate / 2
+        let highPassCutoff = max(1, min(lowFrequency, nyquist - 1))
+        let lowPassCutoff = max(highPassCutoff + 1, min(highFrequency, nyquist * 0.99))
 
-        // RBJ biquad coefficients + Direct Form I state. Short names (b0, a1, x1…)
-        // are the canonical cookbook notation — clearer here than verbose renames.
-        let w0 = 2 * Double.pi * centre / sampleRate
-        let alpha = sin(w0) / (2 * quality)
+        // Butterworth (maximally flat) skirts.
+        let quality = 1.0 / 2.0.squareRoot()
+        let highPassed = Self.biquadHighpass(samples, cutoff: highPassCutoff, sampleRate: sampleRate, quality: quality)
+        return Self.biquadLowpass(highPassed, cutoff: lowPassCutoff, sampleRate: sampleRate, quality: quality)
+    }
+
+    // MARK: - RBJ biquads (Direct Form I)
+
+    // Short names (b0, a1, x1…) are the canonical cookbook notation — clearer here
+    // than verbose renames. Coefficients per Robert Bristow-Johnson's Audio EQ
+    // Cookbook; `a0` divides the rest, then a two-sample-history recurrence runs.
+
+    private static func biquadHighpass(
+        _ samples: [Float], cutoff: Double, sampleRate: Double, quality: Double
+    ) -> [Float] {
+        let w0 = 2 * Double.pi * cutoff / sampleRate
         let cosW0 = cos(w0)
+        let alpha = sin(w0) / (2 * quality)
+        return runBiquad(
+            samples,
+            b0: (1 + cosW0) / 2, b1: -(1 + cosW0), b2: (1 + cosW0) / 2,
+            a0: 1 + alpha, a1: -2 * cosW0, a2: 1 - alpha
+        )
+    }
 
-        let b0 = alpha
-        let b1 = 0.0
-        let b2 = -alpha
-        let a0 = 1 + alpha
-        let a1 = -2 * cosW0
-        let a2 = 1 - alpha
+    private static func biquadLowpass(
+        _ samples: [Float], cutoff: Double, sampleRate: Double, quality: Double
+    ) -> [Float] {
+        let w0 = 2 * Double.pi * cutoff / sampleRate
+        let cosW0 = cos(w0)
+        let alpha = sin(w0) / (2 * quality)
+        return runBiquad(
+            samples,
+            b0: (1 - cosW0) / 2, b1: 1 - cosW0, b2: (1 - cosW0) / 2,
+            a0: 1 + alpha, a1: -2 * cosW0, a2: 1 - alpha
+        )
+    }
 
-        // Normalise.
+    private static func runBiquad(
+        _ samples: [Float],
+        b0: Double, b1: Double, b2: Double, a0: Double, a1: Double, a2: Double
+    ) -> [Float] {
         let nb0 = b0 / a0, nb1 = b1 / a0, nb2 = b2 / a0
         let na1 = a1 / a0, na2 = a2 / a0
 
