@@ -17,7 +17,6 @@ import SwiftUI
 
 struct MemoriesView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
 
     @State private var memories: [KnowledgeItem] = []
 
@@ -40,8 +39,6 @@ struct MemoriesView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .frame(width: 480, height: 480)
-        .glassBackdrop()
         .onAppear { reload() }
     }
 
@@ -53,8 +50,6 @@ struct MemoriesView: View {
             Text("\(memories.count) memor\(memories.count == 1 ? "y" : "ies")")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
         }
         .padding(16)
     }
