@@ -938,7 +938,7 @@ final class AppEnvironment {
         // re-warm of a brain already on disk (no modem screech on every launch).
         // The defer guarantees it stops on every exit: ready, cancel, or error.
         let willDownload = !isBrainDownloaded(selectedBrain)
-        if willDownload { soundEffects.startLoop(.dialup) }
+        if willDownload, dialUpSoundEnabled { soundEffects.startLoop(.dialup) }
         defer { soundEffects.stopLoop(.dialup) }
         let mlx = currentMLXProvider
         do {

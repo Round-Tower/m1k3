@@ -23,6 +23,7 @@ struct GeneralSettingsPane: View {
     @Environment(LaunchAtLogin.self) private var launchAtLogin
     @AppStorage(AppEnvironment.notifyOnLongTurnKey) private var notifyOnLongTurn = false
     @AppStorage(AppEnvironment.soundEffectsEnabledKey) private var soundEffectsEnabled = true
+    @AppStorage(AppEnvironment.dialUpSoundEnabledKey) private var dialUpSound = true
     @AppStorage(AppEnvironment.thinkingModeKey) private var thinkingMode = ThinkingMode.auto.rawValue
     @AppStorage(StartupPreferences.menuBarOnlyKey) private var menuBarOnly = false
     @State private var showResetOnboarding = false
@@ -52,13 +53,21 @@ struct GeneralSettingsPane: View {
                     .onChange(of: soundEffectsEnabled) { _, on in
                         env.soundEffects.isEnabled = on
                     }
+                Toggle("Dial-up sound while loading", isOn: $dialUpSound)
+                    .onChange(of: dialUpSound) { _, on in
+                        // Flipping it off mid-download kills the loop at once —
+                        // the whole point is "make it stop, it's annoying".
+                        if !on { env.soundEffects.stopLoop(.dialup) }
+                    }
+                    .disabled(!soundEffectsEnabled)
             } header: {
                 Text("Sound effects")
             } footer: {
                 Text("Short earcons for a few moments — an error, a memory saved, "
-                    + "voice mode waking up — plus a nostalgic dial-up \u{201C}connecting\u{201D} "
-                    + "sound while a brain downloads or loads. They never play over "
-                    + "M1K3's voice. On-device only.")
+                    + "voice mode waking up. They never play over M1K3's voice. "
+                    + "On-device only. The dial-up \u{201C}connecting\u{201D} sound plays while "
+                    + "a brain downloads or loads — nostalgic, but a long loop, so "
+                    + "it has its own switch.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
