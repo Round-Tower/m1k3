@@ -154,7 +154,9 @@ public struct MemoryKind: RawRepresentable, Hashable, Sendable, Codable {
 }
 
 /// One atomic memory. Small, deletable, supersedable.
-public struct Memory: Identifiable, Equatable, Sendable, Codable {
+/// `Hashable` (synthesised — every field is Hashable) so the app can drive
+/// value-based SwiftUI navigation (`navigationDestination(for: Memory.self)`).
+public struct Memory: Identifiable, Equatable, Hashable, Sendable, Codable {
     public var id: UUID
     public var kind: MemoryKind
     /// The fact itself. Atomic — one idea per row. Soft cap at write time
