@@ -105,6 +105,15 @@ public struct PromptSizeMeasurement: Sendable, Equatable {
 
     /// The ratio the char≈token estimates should be tuned to for this corpus —
     /// the [SPIKE] figure. nil when unmeasurable.
+    ///
+    /// Conservative by construction, not exact: components like "template"
+    /// (and "persona+tools (KV-seed)" on Big's native path) pair real tokens
+    /// with `bytes: 0` — they were never rendered as text of their own — so
+    /// they inflate `totalTokens` without inflating `totalBytes`. The ratio
+    /// therefore reads a little LOWER than the prose alone would produce; a
+    /// chars/token estimate calibrated off it is biased toward reserving
+    /// slightly MORE tokens for a given byte count, which is the safe
+    /// direction for a figure that feeds a context-budget reserve.
     public var measuredCharsPerToken: Double? {
         guard let totalTokens, totalTokens > 0 else { return nil }
         return Double(totalBytes) / Double(totalTokens)

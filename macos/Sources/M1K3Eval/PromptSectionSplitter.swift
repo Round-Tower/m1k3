@@ -115,6 +115,11 @@ public enum PromptSectionSplitter {
     /// First occurrence of `needle` at or after `from` that begins a LINE —
     /// i.e. sits at the very start of the prompt or immediately after a
     /// newline. Prose mentions inside a retrieved chunk are skipped.
+    ///
+    /// Worst case is O(n·m) (a false-positive-heavy haystack re-scans from
+    /// each near-miss) — acceptable at real prompt sizes (single-digit
+    /// KB, a handful of markers); this is not a hot loop and no algorithmic
+    /// change is warranted for the inputs this instrument actually sees.
     private static func firstLineAnchoredMatch(
         of needle: String, in haystack: String, from: String.Index
     ) -> String.Index? {
