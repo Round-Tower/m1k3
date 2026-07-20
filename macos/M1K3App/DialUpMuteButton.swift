@@ -37,6 +37,7 @@ struct DialUpMuteButton: View {
             .foregroundStyle(.secondary)
             .help(dialUpSound ? "Mute the dial-up connecting sound" : "Unmute the dial-up connecting sound")
             .accessibilityLabel(dialUpSound ? "Mute dial-up sound" : "Unmute dial-up sound")
+            .padding()
         }
     }
 

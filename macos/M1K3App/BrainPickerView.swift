@@ -61,8 +61,9 @@ struct BrainPickerView: View {
             VStack(spacing: 24) {
                 header(
                     title: "Brain",
-                    subtitle: "Pick my brain — it runs entirely on this Mac. Change it any time."
+                    subtitle: isWakingBrain ? "Configuring M1K3's mainframe" : "Pick a brain"
                 )
+
                 if isWakingBrain { brainAwakening } else { brainPicker }
             }
             .padding(32)
@@ -148,17 +149,20 @@ struct BrainPickerView: View {
     /// the receded avatar backdrop already says who's working. A download shows
     /// its honest progress bar; everything else is just the spinner.
     private var brainAwakening: some View {
-        VStack(spacing: 20) {
+        VStack(alignment: .center, spacing: 20) {
             Spacer()
 
             switch env.modelLoad {
             case let .downloading(fraction):
                 VStack(spacing: 6) {
+                    Spacer()
                     ProgressView(value: fraction).frame(maxWidth: 320)
                     Text(env.modelLoad.label(modelName: selectedBrain.displayName))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+
                     DialUpMuteButton()
+                    Spacer()
                 }
             case .failed:
                 VStack(spacing: 10) {
