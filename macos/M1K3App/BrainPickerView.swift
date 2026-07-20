@@ -158,6 +158,7 @@ struct BrainPickerView: View {
                     Text(env.modelLoad.label(modelName: selectedBrain.displayName))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+                    DialUpMuteButton()
                 }
             case .failed:
                 VStack(spacing: 10) {

@@ -984,6 +984,7 @@ private struct ModelGateView: View {
                 Text(loadingLabel(state))
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                DialUpMuteButton()
             }
         case let .failed(message):
             VStack(spacing: 14) {
