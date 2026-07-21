@@ -68,16 +68,51 @@ enum AppleWordTiming {
 
 public extension EffectfulSpeechProvider {
     /// Play a stream of PCM chunks as ONE utterance through the effect chain:
-    /// buffers schedule as chunks arrive, lifecycle fires once at each end,
-    /// word timing flows out through `onTimelineReady`/`onWordSpoken`.
+    /// buffers schedule as chunks arrive, lifecycle fires once at each end, word
+    /// timing flows out through `onTimelineReady`/`onWordSpoken`. Returns `false`
+    /// when no audio was ever scheduled (the caller should fall back).
     ///
-    /// A mid-stream synthesis error ends the utterance gracefully — whatever is
-    /// scheduled finishes playing. Returns `false` when no audio was ever
-    /// scheduled (the caller should fall back); lifecycle stays silent then.
-    @MainActor
+    /// This is the public, GATED entry point — the Kokoro / "M1K3 Voice" tier calls
+    /// it directly (`KokoroSpeechProvider.synthesize`), so it MUST honour the same
+    /// one-render-at-a-time invariant as `speak(_:)`/`speak(rawPCM:)`. It claims an
+    /// entry generation and runs `renderStream` through `entryGate`, so a stream can
+    /// never overlap another render on the shared `player`/`streamingSession`, and a
+    /// stream superseded while queued bails via the generation guard. (Before this,
+    /// the highest-traffic voice path bypassed the #52 gate entirely.)
     @discardableResult
     func speak(stream: AsyncThrowingStream<TimedPCMChunk, Error>, sampleRate: Double) async -> Bool {
-        if await isSpeaking() { await stop() }
+        let generation = await claimEntry()
+        // Default TRUE = "handled, don't fall back". `runRender` bails WITHOUT running
+        // the closure when this entry was superseded (a newer speak() bumped the
+        // generation while we queued behind the gate) — leaving `spoke` at its
+        // default. The caller (KokoroSpeechProvider.synthesize) reads a `false` return
+        // as "nothing synthesised → speak it in the Apple voice"; falling back for an
+        // utterance we DELIBERATELY abandoned would re-speak stale text and stop() the
+        // newer render — the #52 barge-in bug, via the gate's own early-return. Only a
+        // render that actually ran and scheduled nothing sets this false.
+        let outcome = StreamOutcome(spoke: true)
+        await entryGate.run { [self] in
+            await runRender(generation) {
+                outcome.spoke = await self.renderStream(stream: stream, sampleRate: sampleRate)
+            }
+        }
+        return outcome.spoke
+    }
+}
+
+extension EffectfulSpeechProvider {
+    /// The un-gated streaming worker: schedule PCM chunks onto the one player
+    /// session with word timing. A mid-stream synthesis error ends gracefully —
+    /// whatever is scheduled finishes playing; returns `false` when nothing was
+    /// scheduled (lifecycle stays silent then).
+    ///
+    /// Internal, not the gated `speak(stream:)`: `renderText` (the Apple path) is
+    /// ALREADY running inside the gate via `runRender`, so it calls this directly —
+    /// routing it back through the gated entry would self-deadlock on its own
+    /// predecessor task. External callers must use `speak(stream:)`.
+    @MainActor
+    @discardableResult
+    func renderStream(stream: AsyncThrowingStream<TimedPCMChunk, Error>, sampleRate: Double) async -> Bool {
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false
         ) else { return false }
@@ -112,6 +147,19 @@ public extension EffectfulSpeechProvider {
         if streamingSession === session { streamingSession = nil }
         if started { fireSpeakingEnded() }
         return started
+    }
+}
+
+/// A Sendable box to carry `renderStream`'s Bool out of the `@Sendable` gate
+/// closure (which can't capture a mutable local). The gate serialises access and
+/// `speak(stream:)` reads it only after `entryGate.run` returns, so the plain
+/// `var` is safe — hence `@unchecked Sendable`. Seeded `true` by the caller so a
+/// superseded entry (whose render closure never runs) reports "don't fall back";
+/// see `speak(stream:)`.
+private final class StreamOutcome: @unchecked Sendable {
+    var spoke: Bool
+    init(spoke: Bool) {
+        self.spoke = spoke
     }
 }
 

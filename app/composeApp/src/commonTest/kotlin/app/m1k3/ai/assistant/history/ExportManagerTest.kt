@@ -360,9 +360,8 @@ class ExportManagerTest {
         assertNull(markdown, "Should return null for non-existent conversation")
     }
 
-    // ==================== JSON Import Tests (Future Phase 2.1) ====================
+    // ==================== JSON Import Tests ====================
 
-    @Ignore("Phase 2.1: Import functionality for backup restoration")
     @Test
     fun `importConversationFromJson restores conversation`() {
         // Arrange
@@ -371,6 +370,7 @@ class ExportManagerTest {
         val exportManager = ExportManager(database)
 
         val projectId = "project_001"
+        database.seedProject(projectId)
         val convId = conversationRepo.createConversation(projectId, "Test")
 
         database.messageQueries.insertMessage(
@@ -410,4 +410,156 @@ class ExportManagerTest {
         assertEquals(1, messages.size, "Should restore messages")
         assertEquals("Original message", messages.first().content, "Message content should match")
     }
+
+    @Test
+    fun `importConversationFromJson round-trips all messages and metadata`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val exportManager = ExportManager(database)
+
+        val projectId = "project_001"
+        database.seedProject("project_002") // the import target must exist
+        val convId = conversationRepo.createConversation(projectId, "Round Trip")
+
+        val now = Clock.System.now().toEpochMilliseconds()
+        database.messageQueries.insertMessage(
+            id = "msg_001", project_id = projectId, conversation_id = convId,
+            role = "user", content = "First message", tokens = 3, timestamp = now,
+            image_uri = null, sentiment_valence = null, sentiment_arousal = null,
+            sentiment_dominance = null, sentiment_emotion = null, sentiment_intensity = null,
+            rag_sources = null, rag_confidence = null
+        )
+        database.messageQueries.insertMessage(
+            id = "msg_002", project_id = projectId, conversation_id = convId,
+            role = "assistant", content = "Second message", tokens = 7, timestamp = now + 1,
+            image_uri = null, sentiment_valence = null, sentiment_arousal = null,
+            sentiment_dominance = null, sentiment_emotion = null, sentiment_intensity = null,
+            rag_sources = null, rag_confidence = null
+        )
+
+        val json = exportManager.exportConversationToJson(convId)!!
+
+        // Act - import into a different project without deleting the original
+        val newConvId = exportManager.importConversationFromJson("project_002", json)
+
+        // Assert - both conversations now coexist
+        assertNotNull(newConvId, "Should return new conversation ID")
+        assertNotEquals(convId, newConvId, "Import should create a distinct conversation")
+
+        val imported = conversationRepo.getConversationById(newConvId)
+        assertNotNull(imported, "Imported conversation should exist")
+        assertEquals("Round Trip", imported.title, "Title should be preserved")
+        assertEquals("project_002", imported.projectId, "Should import into the target project")
+
+        val messages = database.messageQueries.getMessagesByConversation(newConvId).executeAsList()
+        assertEquals(2, messages.size, "Should restore all messages")
+        assertEquals("First message", messages[0].content)
+        assertEquals("Second message", messages[1].content)
+        assertEquals(7L, messages[1].tokens, "Token counts should be preserved")
+
+        // Original conversation is untouched
+        assertNotNull(conversationRepo.getConversationById(convId), "Original should remain")
+    }
+
+    @Test
+    fun `importConversationFromJson returns null for malformed JSON`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val exportManager = ExportManager(database)
+
+        // Act
+        val result = exportManager.importConversationFromJson("project_001", "not valid json {")
+
+        // Assert
+        assertNull(result, "Should return null for unparseable JSON")
+    }
+
+    @Test
+    fun `importConversationFromJson recomputes counts from messages, not the JSON`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val conversationRepo = ConversationRepository(database)
+        val exportManager = ExportManager(database)
+
+        database.seedProject("project_001")
+
+        // A backup whose declared counts LIE about its contents (hand-edited or
+        // corrupted): messageCount/tokenCount claim 999, but there are two messages
+        // totalling 10 tokens.
+        val tampered = """
+            {
+              "title": "Tampered",
+              "projectId": "old_project",
+              "startedAt": 1000,
+              "lastMessageAt": 2000,
+              "messageCount": 999,
+              "tokenCount": 999,
+              "messages": [
+                { "id": "a", "role": "user", "content": "one", "timestamp": 1000, "tokens": 3 },
+                { "id": "b", "role": "assistant", "content": "two", "timestamp": 1500, "tokens": 7 }
+              ]
+            }
+        """.trimIndent()
+
+        // Act
+        val newConvId = exportManager.importConversationFromJson("project_001", tampered)
+
+        // Assert — the stored counts reflect the actual messages, not the JSON's claims.
+        assertNotNull(newConvId, "Should import a valid (if mislabelled) backup")
+        val imported = conversationRepo.getConversationById(newConvId)
+        assertNotNull(imported, "Imported conversation should exist")
+        assertEquals(2, imported.messageCount, "message_count derived from messages, not JSON")
+        assertEquals(10, imported.tokenCount, "token_count summed from messages, not JSON")
+
+        val messages = database.messageQueries.getMessagesByConversation(newConvId).executeAsList()
+        assertEquals(2, messages.size)
+    }
+
+    @Test
+    fun `importConversationFromJson returns null for an unknown target project`() {
+        // Arrange
+        val database = TestDatabaseFactory.createInMemoryDatabase()
+        val exportManager = ExportManager(database)
+
+        // Syntactically valid export, but the target project was never created.
+        val json = """
+            {
+              "title": "Orphan",
+              "projectId": "old_project",
+              "startedAt": 1,
+              "lastMessageAt": 2,
+              "messageCount": 0,
+              "tokenCount": 0,
+              "messages": []
+            }
+        """.trimIndent()
+
+        // Act
+        val result = exportManager.importConversationFromJson("does_not_exist", json)
+
+        // Assert — a bad restore target is rejected up front, like malformed JSON.
+        assertNull(result, "Unknown target project should be rejected, not silently orphaned")
+        assertEquals(
+            0,
+            database.conversationMetadataQueries.getConversationsByProject("does_not_exist").executeAsList().size,
+            "Nothing should have been written for the unknown project"
+        )
+    }
+}
+
+/** Insert a minimal Project row so imports (which now require an existing target) can land. */
+private fun MaDatabase.seedProject(id: String) {
+    projectQueries.insertProject(
+        id = id,
+        name = id,
+        description = null,
+        created_at = 0,
+        updated_at = 0,
+        is_archived = 0,
+        color = null,
+        icon = null,
+        message_count = 0,
+        total_tokens = 0
+    )
 }

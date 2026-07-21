@@ -45,6 +45,24 @@ struct VoiceEffectTests {
         #expect(out[3] == -0.1)
     }
 
+    @Test("normalise-into-soft-clip makes the clip engage (gain-staging guard)")
+    func compressorEngagesAfterNormalise() {
+        // A signal whose peaks sit below the 0.6 threshold: the soft-clip alone is
+        // a no-op on it — this is exactly how the stage silently went inert when the
+        // bandpass in front of it scooped the level.
+        let quiet: [Float] = [0.3, -0.3, 0.25, -0.2]
+        let clip = CompressionEffect(threshold: 0.6, ratio: 0.4)
+        #expect(clip.apply(to: quiet, sampleRate: sampleRate) == quiet)
+
+        // Normalising up to full-scale FIRST (as m1k3Character now does) drives the
+        // peak into the knee, so the clip actually pulls it down.
+        let staged = clip.apply(
+            to: NormalizationEffect(level: 1.0).apply(to: quiet, sampleRate: sampleRate),
+            sampleRate: sampleRate
+        )
+        #expect(peak(staged) < 1.0)
+    }
+
     // MARK: - Bandpass
 
     @Test("bandpass passes an in-band tone and rejects a very low tone")
@@ -65,6 +83,18 @@ struct VoiceEffectTests {
         let out = BandpassEffect().apply(to: sine(1000, amplitude: 0.9), sampleRate: sampleRate)
         #expect(out.allSatisfy { $0.isFinite })
         #expect(peak(out) < 5) // a sane bound — never blows up
+    }
+
+    @Test("bandpass passband is near-unity — an in-band tone is NOT scooped")
+    func bandpassPassbandNearUnity() {
+        // 1000 Hz sits comfortably inside 320–3600, so the HPF+LPF cascade should
+        // pass it at close to its input level. The old single constant-skirt biquad
+        // attenuated the whole band by ~10 dB (a 0.5 tone came out near ~0.16); the
+        // cascade keeps it near unity. This locks the passband gain in.
+        let inBand = sine(1000, amplitude: 0.5)
+        let out = BandpassEffect(lowFrequency: 320, highFrequency: 3600)
+            .apply(to: inBand, sampleRate: sampleRate)
+        #expect(peak(Array(out.suffix(1200))) > 0.4) // was ~0.16 before
     }
 
     // MARK: - Tremolo

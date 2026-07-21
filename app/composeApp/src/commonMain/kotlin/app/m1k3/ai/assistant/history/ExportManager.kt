@@ -5,6 +5,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -252,24 +253,114 @@ class ExportManager(private val database: MaDatabase) {
         return "${dateTime.date} ${dateTime.hour}:${dateTime.minute.toString().padStart(2, '0')}"
     }
 
-    // ==================== Future: Import Functionality (Phase 2.1) ====================
+    // ==================== Import (backup restore) ====================
 
     /**
      * Import a conversation from JSON (backup restoration).
      *
-     * TODO: Implement in Phase 2.1
+     * Parses a JSON produced by [exportConversationToJson], creates a fresh
+     * conversation in [projectId] (preserving the exported title and timestamps;
+     * the message/token counts are recomputed from the restored messages rather
+     * than trusted from the JSON), and re-inserts every message under new,
+     * collision-free ids so the same backup can be restored more than once. The
+     * conversation is created under the target [projectId], not the project
+     * recorded in the export, so a backup can be restored into any EXISTING
+     * project. The conversation row and all messages are written in a single
+     * transaction, so a partial/failed restore rolls back rather than leaving an
+     * orphaned row.
      *
-     * @param projectId Project to import into
-     * @param json JSON export string
-     * @return New conversation ID
+     * Restore is LOSSY, matching the export format: only role/content/timestamp/
+     * tokens round-trip. Message `image_uri`, sentiment (`sentiment_*`), and RAG
+     * metadata (`rag_sources`/`rag_confidence`) are never serialized by
+     * [exportConversationToJson], so they come back null — a restored conversation
+     * loses image attachments, RAG citations, and sentiment history. The
+     * conversation's archived state isn't exported either, so a restore always
+     * lands active.
+     *
+     * Blocking DB work, like the sibling `export*` methods: this opens a SQLCipher
+     * write transaction and loops inserts synchronously, so a UI caller must run it
+     * off the main thread (e.g. `withContext(Dispatchers.IO)`).
+     *
+     * @param projectId Project to import into; must name an existing project.
+     * @param json JSON export string (as produced by [exportConversationToJson])
+     * @return New conversation ID, or null if the JSON could not be parsed OR
+     *   [projectId] does not name an existing project — both yield null without
+     *   writing anything (the project check runs inside the restore transaction,
+     *   atomic with the insert). A genuine database error during the transaction
+     *   still propagates — only bad input yields null.
      */
     fun importConversationFromJson(projectId: String, json: String): Long? {
-        // TODO: Phase 2.1
-        // - Parse JSON
-        // - Create conversation
-        // - Insert messages
-        // - Return new conversation ID
-        return null
+        val export = try {
+            this.json.decodeFromString<ConversationExport>(json)
+        } catch (e: Exception) {
+            return null
+        }
+
+        // Derive the counts from the actual messages rather than trusting the
+        // exported metadata: a hand-edited or corrupted backup must not leave the
+        // conversation permanently reporting a message/token total that disagrees
+        // with the messages it actually restored.
+        val messageCount = export.messages.size.toLong()
+        val tokenCount = export.messages.sumOf { (it.tokens ?: 0).toLong() }
+
+        // Everything in ONE transaction — the target-project existence check INCLUDED,
+        // so the check is atomic with the insert (no window for the project to be
+        // deleted between checking and writing) and a mid-loop failure rolls back. FK
+        // enforcement (PRAGMA foreign_keys = ON) isn't set on the driver, so this
+        // explicit check is what stops a typo'd/stale projectId from silently inserting
+        // an orphaned conversation that no project screen can ever reach
+        // (getConversationsByProject filters by plain string equality). getLastInsertId()
+        // reads this insert on the same connection. The transaction-wrapping follows
+        // SqlDelightPassageRepository.saveSource; the rollback()-to-reject is this
+        // path's own (saveSource doesn't reject mid-transaction).
+        var newConversationId: Long? = null
+        database.transaction {
+            // Unknown target project → roll back and leave newConversationId null, so
+            // importConversationFromJson returns null (like the malformed-JSON path),
+            // having written nothing.
+            if (database.projectQueries.getProjectById(projectId).executeAsOneOrNull() == null) {
+                rollback()
+            }
+
+            database.conversationMetadataQueries.insertConversation(
+                project_id = projectId,
+                title = export.title,
+                started_at = export.startedAt,
+                last_message_at = export.lastMessageAt,
+                message_count = messageCount,
+                token_count = tokenCount,
+                is_archived = 0
+            )
+
+            val conversationId = database.conversationMetadataQueries
+                .getLastInsertId()
+                .executeAsOne()
+            newConversationId = conversationId
+
+            // Fresh ids keyed on the new conversation id, so restoring the same
+            // backup twice never collides on the message primary key.
+            export.messages.forEachIndexed { index, message ->
+                database.messageQueries.insertMessage(
+                    id = "msg_${conversationId}_$index",
+                    project_id = projectId,
+                    conversation_id = conversationId,
+                    role = message.role,
+                    content = message.content,
+                    tokens = message.tokens?.toLong(),
+                    timestamp = message.timestamp,
+                    image_uri = null,
+                    sentiment_valence = null,
+                    sentiment_arousal = null,
+                    sentiment_dominance = null,
+                    sentiment_emotion = null,
+                    sentiment_intensity = null,
+                    rag_sources = null,
+                    rag_confidence = null
+                )
+            }
+        }
+
+        return newConversationId
     }
 }
 
