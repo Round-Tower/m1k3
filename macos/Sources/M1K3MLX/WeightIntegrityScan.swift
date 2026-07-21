@@ -124,30 +124,7 @@ public enum WeightIntegrityScan {
             throw WeightsStaleError(repoID: repoID, localRevision: local, pinnedRevision: pin.revision)
         }
 
-        var observed: [String: WeightIntegrity.ObservedFile] = [:]
-        var unreadable: Set<String> = []
-        for (name, expected) in pin.files {
-            let fileURL = directory.appendingPathComponent(name)
-            // Absent is the ordinary in-flight case and must stay benign, so
-            // existence is checked separately from readability: only a file
-            // that IS there but resists reading counts as unverifiable.
-            guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
-            guard let size = fileSize(at: fileURL) else {
-                unreadable.insert(name)
-                continue
-            }
-            // A size disagreement is already conclusive, so skip the hash —
-            // this also means a truncated multi-GB shard costs nothing to reject.
-            guard size == expected.size else {
-                observed[name] = .init(size: size, sha256: "")
-                continue
-            }
-            guard let digest = sha256(of: fileURL) else {
-                unreadable.insert(name)
-                continue
-            }
-            observed[name] = .init(size: size, sha256: digest)
-        }
+        let (observed, unreadable) = observe(directory: directory, pin: pin)
 
         switch WeightIntegrity.verdict(pin: pin, observed: observed, unreadable: unreadable) {
         case .unpinned, .incomplete:
@@ -264,6 +241,49 @@ public enum WeightIntegrityScan {
             commits.insert(String(first).trimmingCharacters(in: .whitespaces))
         }
         return commits.count == 1 ? commits.first : nil
+    }
+
+    /// Hash every pinned file present in `directory` and report what is
+    /// there. Not `private`: `WeightImport` reuses this exact scan to check a
+    /// user-supplied folder against the same manifest, and it must reuse the
+    /// hashing rather than restate it — a second implementation is a second
+    /// place for the do/catch-vs-`try?` bug above to be reintroduced.
+    ///
+    /// Deliberately has no opinion on receipts or revision staleness — those
+    /// are `enforce`'s concerns (an acquired-and-cached directory can be
+    /// legitimately stale; an arbitrary folder someone hands the app has no
+    /// such history). This function only ever answers "what do these bytes
+    /// look like against this pin", which is exactly the primitive both
+    /// callers need.
+    static func observe(
+        directory: URL,
+        pin: WeightIntegrity.Pin
+    ) -> (observed: [String: WeightIntegrity.ObservedFile], unreadable: Set<String>) {
+        var observed: [String: WeightIntegrity.ObservedFile] = [:]
+        var unreadable: Set<String> = []
+        for (name, expected) in pin.files {
+            let fileURL = directory.appendingPathComponent(name)
+            // Absent is the ordinary in-flight case and must stay benign, so
+            // existence is checked separately from readability: only a file
+            // that IS there but resists reading counts as unverifiable.
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+            guard let size = fileSize(at: fileURL) else {
+                unreadable.insert(name)
+                continue
+            }
+            // A size disagreement is already conclusive, so skip the hash —
+            // this also means a truncated multi-GB shard costs nothing to reject.
+            guard size == expected.size else {
+                observed[name] = .init(size: size, sha256: "")
+                continue
+            }
+            guard let digest = sha256(of: fileURL) else {
+                unreadable.insert(name)
+                continue
+            }
+            observed[name] = .init(size: size, sha256: digest)
+        }
+        return (observed, unreadable)
     }
 
     private static func fileSize(at url: URL) -> Int? {

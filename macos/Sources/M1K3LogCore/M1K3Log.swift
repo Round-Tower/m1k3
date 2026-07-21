@@ -71,6 +71,9 @@ public enum M1K3Log {
         /// Its `.fault` lines are the supply-chain tripwire firing — a refused
         /// load, not a retryable failure.
         case weightIntegrity = "weight-integrity"
+        /// User-initiated import of weights already on disk, verified against
+        /// the same pinned manifest as a download (`WeightImport`).
+        case weightImport = "weight-import"
         /// MLX Metal memory budget / ceiling.
         case mlxMemory = "mlx-memory"
         /// Embedding service load + reindex.
