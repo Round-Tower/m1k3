@@ -52,6 +52,36 @@ public enum WeightImportDisplay {
         allCases.filter { $0.mlxModelID != nil }
     }
 
+    /// Where a brain's weights currently sit, for the pane to surface — the
+    /// natural other half of "import from a folder". Import is for when they
+    /// are somewhere else; this is for when they are already here.
+    public enum FolderStatus: Equatable, Sendable {
+        /// On disk at `url` — offer to reveal it in Finder.
+        case present(url: URL)
+        /// Not downloaded yet, so there is nothing to show. The location where
+        /// it WOULD land is deliberately not surfaced: revealing an empty or
+        /// missing folder reads as "here are your weights" when there are none.
+        case absent
+
+        public var revealURL: URL? {
+            switch self {
+            case let .present(url): url
+            case .absent: nil
+            }
+        }
+    }
+
+    /// Resolve the display status for a brain's current on-disk weights.
+    /// `location` is where its files live (from `WeightImport.defaultDestination`,
+    /// which is download-base-aware); `isInstalled` is whether the bytes are
+    /// actually there. Only a genuinely present folder is revealable — a known
+    /// location with no bytes is still `.absent`, so the pane never points a
+    /// person at an empty directory.
+    public static func folderStatus(isInstalled: Bool, location: URL?) -> FolderStatus {
+        guard isInstalled, let location else { return .absent }
+        return .present(url: location)
+    }
+
     /// `.installed`/`.alreadyPresent` both read as success — `.alreadyPresent`
     /// is explicitly NOT an error (the spec's own framing: "say so plainly;
     /// this is a success, not an error").

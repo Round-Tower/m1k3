@@ -256,6 +256,8 @@ struct AdvancedSettingsPane: View {
             .accessibilityLabel("Which brain's weights to import")
             .disabled(env.weightImportState == .importing)
 
+            currentWeightsRow
+
             Button("Import weights from a folder…", action: presentWeightImportPanel)
                 .buttonStyle(.glass)
                 .disabled(env.weightImportState == .importing)
@@ -268,6 +270,45 @@ struct AdvancedSettingsPane: View {
             Text("Already have a model's weights on disk from somewhere else? Point M1K3 at "
                 + "the folder — it verifies every file against the digests pinned in this "
                 + "build before installing, and refuses anything that doesn't match.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Where the selected brain's weights currently live — the natural
+    /// companion to importing. When they're on disk, show the folder and a
+    /// Reveal button; when they're not, say so plainly rather than point at an
+    /// empty directory. Location comes from `WeightImport.defaultDestination`
+    /// (download-base-aware, so the embedder resolves correctly too), install
+    /// state from `env.isBrainDownloaded`.
+    @ViewBuilder
+    private var currentWeightsRow: some View {
+        let modelID = weightImportTier.mlxModelID
+        let location = modelID.map { WeightImport.defaultDestination(for: $0) }
+        let status = WeightImportDisplay.folderStatus(
+            isInstalled: env.isBrainDownloaded(weightImportTier),
+            location: location
+        )
+        switch status {
+        case let .present(url):
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("On this Mac")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(url.path(percentEncoded: false))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 8)
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .buttonStyle(.link)
+                .accessibilityLabel("Reveal \(weightImportTier.displayName)'s weights in Finder")
+            }
+        case .absent:
+            Text("Not on this Mac yet — download it, or import a folder below.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -311,6 +352,11 @@ struct AdvancedSettingsPane: View {
         panel.allowsMultipleSelection = false
         panel.prompt = "Import"
         panel.message = "Choose the folder holding \(weightImportTier.displayName)'s weights."
+        // Start where this brain's weights would live, so a person importing
+        // from a copy lands near the real thing rather than at their home dir.
+        if let modelID = weightImportTier.mlxModelID {
+            panel.directoryURL = WeightImport.defaultDestination(for: modelID).deletingLastPathComponent()
+        }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await env.importWeights(from: url, for: weightImportTier) }
     }
