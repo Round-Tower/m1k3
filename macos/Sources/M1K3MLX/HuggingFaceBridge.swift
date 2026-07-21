@@ -127,8 +127,14 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         let repo = Hub.Repo(id: id)
         let localPath = hub.localRepoLocation(repo)
         let startSizeMB = Self.directorySizeMB(localPath)
+        // Resolve to the PINNED commit for anything we ship. An explicit
+        // caller-supplied revision still wins (the eval harness pins its own),
+        // but the default is no longer "whatever main points at right now" —
+        // that made every download a moving target, and it is how an upstream
+        // change lands in a user's build with no code change and no review.
+        let resolvedRevision = revision ?? PinnedWeights.pin(for: id)?.revision ?? "main"
         downloadLog.notice(
-            "snapshot start: \(id, privacy: .public) rev=\(revision ?? "main", privacy: .public) localMB=\(startSizeMB)"
+            "snapshot start: \(id, privacy: .public) rev=\(resolvedRevision, privacy: .public) localMB=\(startSizeMB)"
         )
         let clock = ContinuousClock()
         let started = clock.now
@@ -138,7 +144,7 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         // Expected byte total from the repo tree (best-effort) — the basis for
         // an HONEST progress bar. HubApi's own fraction is file-weighted, so
         // onboarding sat at "25%" for minutes while one safetensors streamed.
-        let expectedBytes = await RepoSizeEstimate.fetchEntries(repoID: id, revision: revision ?? "main")
+        let expectedBytes = await RepoSizeEstimate.fetchEntries(repoID: id, revision: resolvedRevision)
             .flatMap { RepoSizeEstimate.expectedBytes(entries: $0, matching: patterns) }
         if let expectedBytes {
             let expectedMB = expectedBytes / 1_048_576
@@ -153,7 +159,7 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         do {
             let url = try await hub.snapshot(
                 from: repo,
-                revision: revision ?? "main",
+                revision: resolvedRevision,
                 matching: patterns,
                 progressHandler: { progress in
                     let fraction = progress.fractionCompleted
@@ -189,6 +195,12 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
             downloadLog.notice(
                 "snapshot done: \(id, privacy: .public) in \(totalSeconds)s sizeMB=\(sizeMB)"
             )
+            // Supply-chain tripwire: check the bytes against the digests pinned
+            // in this build BEFORE any factory reads a tensor. This is the one
+            // window where refusal actually prevents a poisoned load. Throws
+            // only WeightTamperError, which is not a transient network error,
+            // so `withRetry` fails the load instead of spinning on it.
+            try WeightIntegrityScan.enforce(directory: url, repoID: id)
             return url
         } catch Hub.HubClientError.authorizationRequired {
             // Typically "repo doesn't exist on the server" — fall back to any
@@ -196,13 +208,20 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
             downloadLog.warning(
                 "snapshot auth-required for \(id, privacy: .public) — using local copy (localMB=\(startSizeMB))"
             )
+            // The fallbacks are verified too: a cache poisoned on an earlier
+            // run must not become trusted just because we're offline now.
+            try WeightIntegrityScan.enforce(directory: localPath, repoID: id)
             return localPath
+        } catch let error as WeightTamperError {
+            // Never swallowed by the network-error handling below.
+            throw error
         } catch {
             let nserror = error as NSError
             if nserror.domain == NSURLErrorDomain, nserror.code == NSURLErrorNotConnectedToInternet {
                 downloadLog.warning(
                     "offline — using local copy of \(id, privacy: .public) (localMB=\(startSizeMB))"
                 )
+                try WeightIntegrityScan.enforce(directory: localPath, repoID: id)
                 return localPath
             }
             let reason = error.localizedDescription

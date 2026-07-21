@@ -67,6 +67,10 @@ public enum M1K3Log {
         case ttft
         /// Model weight download (HuggingFace bridge).
         case modelDownload = "model-download"
+        /// Downloaded-weight verification against the pinned digest manifest.
+        /// Its `.fault` lines are the supply-chain tripwire firing — a refused
+        /// load, not a retryable failure.
+        case weightIntegrity = "weight-integrity"
         /// MLX Metal memory budget / ceiling.
         case mlxMemory = "mlx-memory"
         /// Embedding service load + reindex.
