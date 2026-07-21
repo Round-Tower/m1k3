@@ -126,6 +126,26 @@ def collect(repo: str, cache: pathlib.Path) -> tuple[str, dict[str, dict]]:
     return revision, files
 
 
+def swift_int(value: int) -> str:
+    """Format an Int the way swiftformat will anyway.
+
+    Its default `decimalGrouping: 3,6` inserts underscores every three digits
+    once a literal reaches six. Emitting a different shape would mean the
+    format-on-save hook rewrites this file after every regeneration, and
+    `--check` would then report drift on a manifest that is perfectly correct —
+    which would train everyone to ignore it.
+    """
+    text = str(value)
+    if len(text) < 6:
+        return text
+    digits = []
+    for offset, char in enumerate(reversed(text)):
+        if offset and offset % 3 == 0:
+            digits.append("_")
+        digits.append(char)
+    return "".join(reversed(digits))
+
+
 def swift_literal(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
     lines = [
         "//",
@@ -162,7 +182,7 @@ def swift_literal(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
         for name, meta in sorted(files.items()):
             lines.append(
                 f'                "{name}": '
-                f'.init(size: {meta["size"]}, sha256: "{meta["sha256"]}"),'
+                f'.init(size: {swift_int(meta["size"])}, sha256: "{meta["sha256"]}"),'
             )
         lines.append("            ]")
         lines.append("        ),")
