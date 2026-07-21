@@ -64,6 +64,20 @@ public enum WeightIntegrity {
         }
     }
 
+    /// Which on-disk root a repo's files belong under.
+    ///
+    /// These genuinely diverge, for a reason worth not "tidying up": the 2.x
+    /// layout is preserved byte-for-byte so existing caches keep working (see
+    /// `HuggingFaceBridge`'s header). LLM weights sit under Caches, embedder
+    /// weights under Documents/huggingface. Anything that installs files
+    /// therefore has to know which — assuming one base for everything puts the
+    /// embedder where its loader never looks, which reads as a silent no-op
+    /// and then re-downloads the whole thing.
+    public enum DownloadBase: String, Equatable, Sendable {
+        case llm
+        case embedder
+    }
+
     /// A repo pinned to one immutable commit plus the digests of the files we
     /// actually download from it.
     public struct Pin: Equatable, Sendable {

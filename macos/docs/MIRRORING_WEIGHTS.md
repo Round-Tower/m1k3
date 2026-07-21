@@ -62,7 +62,8 @@ this repo has not caught up yet. Open an issue.
 
 M1K3 can adopt a folder of weights directly, so you never need to download
 twice — if you have them from `huggingface-cli`, another machine, or a mirror,
-point the app at the folder.
+point the app at the folder: **Settings → Advanced → Import weights from a
+folder…**, having picked the matching brain.
 
 The app verifies the folder against the manifest first and **refuses it
 outright if anything disagrees**. On success it installs the files along with
@@ -91,7 +92,11 @@ be resolved.
 - Serve HTTP **range requests** if you can. Without them an interrupted
   multi-GB download restarts from zero.
 - Object storage with free or cheap egress is the sane choice. The full payload
-  across all three pinned repos is roughly 11 GB.
+  across all three pinned repos is **9.40 GB** (8.75 GiB) — 6.77 GB for the
+  12B brain, 2.28 GB for the 4B, 0.35 GB for the embedder. Sum the `size`
+  fields in the manifest yourself rather than trusting this line; it is
+  reproducible, and a figure in prose goes stale the moment a brain is
+  promoted.
 
 ## Licensing
 

@@ -55,6 +55,11 @@ SHIPPED_REPOS = {
     "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": EMBEDDER_CACHE,
 }
 
+# Which download root each repo belongs under, emitted into the manifest so the
+# app never has to guess. Derived from the cache path above rather than listed
+# separately — a second list is a second thing to forget to update.
+BASE_NAMES = {LLM_CACHE: "llm", EMBEDDER_CACHE: "embedder"}
+
 # Deliberately NO suffix filter. An earlier cut mirrored mlx-swift-lm's
 # `modelDownloadPatterns` as a hardcoded tuple, which security review flagged
 # as silent-drift bait: those patterns are `package`-scoped so we cannot assert
@@ -222,7 +227,7 @@ def swift_literal(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
         "public enum PinnedWeights {",
         "    public static let all: [String: WeightIntegrity.Pin] = [",
     ]
-    for repo, (revision, files) in sorted(pins.items()):
+    for repo, (revision, files, _base) in sorted(pins.items()):
         lines.append(f'        "{repo}": .init(')
         lines.append(f'            revision: "{revision}",')
         lines.append("            files: [")
@@ -236,9 +241,26 @@ def swift_literal(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
     lines += [
         "    ]",
         "",
+        "    /// Which download root each pinned repo belongs under. LLM weights",
+        "    /// and embedder weights live in genuinely different places (the 2.x",
+        "    /// layout, preserved so existing caches keep working), so anything",
+        "    /// installing files has to know which — assuming one base puts the",
+        "    /// embedder where its loader never looks.",
+        "    public static let bases: [String: WeightIntegrity.DownloadBase] = [",
+    ]
+    for repo, (_revision, _files, base) in sorted(pins.items()):
+        lines.append(f'        "{repo}": .{base},')
+    lines += [
+        "    ]",
+        "",
         "    /// The pin for `repoID`, or nil when the repo ships unpinned.",
         "    public static func pin(for repoID: String) -> WeightIntegrity.Pin? {",
         "        all[repoID]",
+        "    }",
+        "",
+        "    /// The download root for `repoID`, or nil when the repo is unpinned.",
+        "    public static func downloadBase(for repoID: String) -> WeightIntegrity.DownloadBase? {",
+        "        bases[repoID]",
         "    }",
         "}",
         "",
@@ -264,12 +286,13 @@ def json_manifest(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
         "repos": {
             repo: {
                 "revision": revision,
+                "downloadBase": base,
                 "files": {
                     name: {"size": meta["size"], "sha256": meta["sha256"]}
                     for name, meta in sorted(files.items())
                 },
             }
-            for repo, (revision, files) in sorted(pins.items())
+            for repo, (revision, files, base) in sorted(pins.items())
         },
     }
     return json.dumps(document, indent=2, sort_keys=False) + "\n"
@@ -285,7 +308,10 @@ def main() -> None:
     args = parser.parse_args()
 
     print("Pinning shipped model weights (local bytes, cross-checked against HF):")
-    pins = {repo: collect(repo, cache) for repo, cache in SHIPPED_REPOS.items()}
+    pins = {
+        repo: (*collect(repo, cache), BASE_NAMES[cache])
+        for repo, cache in SHIPPED_REPOS.items()
+    }
     outputs = {OUT: swift_literal(pins), JSON_OUT: json_manifest(pins)}
 
     if args.check:

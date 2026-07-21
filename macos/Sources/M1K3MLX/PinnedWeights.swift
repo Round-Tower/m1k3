@@ -70,8 +70,24 @@ public enum PinnedWeights {
         ),
     ]
 
+    /// Which download root each pinned repo belongs under. LLM weights
+    /// and embedder weights live in genuinely different places (the 2.x
+    /// layout, preserved so existing caches keep working), so anything
+    /// installing files has to know which — assuming one base puts the
+    /// embedder where its loader never looks.
+    public static let bases: [String: WeightIntegrity.DownloadBase] = [
+        "mlx-community/Qwen3-4B-Instruct-2507-4bit": .llm,
+        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": .embedder,
+        "mlx-community/gemma-4-12B-it-4bit": .llm,
+    ]
+
     /// The pin for `repoID`, or nil when the repo ships unpinned.
     public static func pin(for repoID: String) -> WeightIntegrity.Pin? {
         all[repoID]
+    }
+
+    /// The download root for `repoID`, or nil when the repo is unpinned.
+    public static func downloadBase(for repoID: String) -> WeightIntegrity.DownloadBase? {
+        bases[repoID]
     }
 }

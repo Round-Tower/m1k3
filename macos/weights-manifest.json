@@ -4,6 +4,7 @@
   "repos": {
     "mlx-community/Qwen3-4B-Instruct-2507-4bit": {
       "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+      "downloadBase": "llm",
       "files": {
         "added_tokens.json": {
           "size": 707,
@@ -49,6 +50,7 @@
     },
     "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": {
       "revision": "6c3ae70858513f1a78e9cdca3cae330d9075cd2a",
+      "downloadBase": "embedder",
       "files": {
         "added_tokens.json": {
           "size": 707,
@@ -94,6 +96,7 @@
     },
     "mlx-community/gemma-4-12B-it-4bit": {
       "revision": "73bcf09092aa277861d5a191b989b666f7f32e8f",
+      "downloadBase": "llm",
       "files": {
         "chat_template.jinja": {
           "size": 17466,

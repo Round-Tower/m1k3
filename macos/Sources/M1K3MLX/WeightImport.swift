@@ -61,13 +61,32 @@ public enum WeightImport {
         case alreadyPresent
     }
 
-    /// Where an import for `repoID` should land — the SAME place
-    /// `HubApiDownloader.llmDefault` would have downloaded it to. A caller
-    /// composes this straight into `importWeights(from:repoID:into:)` so the
-    /// two paths can never drift apart (the drift rule this module follows
-    /// throughout, per `HuggingFaceBridge.swift`'s own header).
+    /// Where an import for `repoID` should land — the SAME place its own
+    /// downloader would have put it, so the two paths can never drift apart
+    /// (the drift rule this module follows throughout, per
+    /// `HuggingFaceBridge.swift`'s header).
+    ///
+    /// ⚠️ The base is looked up per repo, not assumed. The first cut hardcoded
+    /// `llmDefault`, which is right for the two brains and WRONG for the
+    /// retrieval embedder: that one downloads through `embedderDefault`
+    /// (Documents/huggingface, the preserved 2.x layout) and would have been
+    /// installed into the Caches tree, where `MLXEmbeddingService` never
+    /// looks. The import would have reported success and then the app would
+    /// have re-downloaded the whole thing — the exact silent no-op this
+    /// feature exists to prevent. Caught in review before it shipped.
     public static func defaultDestination(for repoID: String) -> URL {
-        HubApiDownloader.llmDefault.hub.localRepoLocation(Hub.Repo(id: repoID))
+        downloader(for: repoID).hub.localRepoLocation(Hub.Repo(id: repoID))
+    }
+
+    /// The downloader whose on-disk root `repoID` belongs under. Unpinned
+    /// repos cannot be imported at all, so the `.llm` fallback is unreachable
+    /// from `importWeights` — it exists so this stays total rather than
+    /// force-unwrapping a manifest lookup.
+    static func downloader(for repoID: String) -> HubApiDownloader {
+        switch PinnedWeights.downloadBase(for: repoID) {
+        case .embedder: HubApiDownloader.embedderDefault
+        case .llm, nil: HubApiDownloader.llmDefault
+        }
     }
 
     /// Verify `source` against the manifest pinned for `repoID`, and if it
@@ -169,7 +188,7 @@ public enum WeightImport {
     static func install(
         pin: WeightIntegrity.Pin,
         source: URL,
-        repoID _: String,
+        repoID: String,
         destination: URL
     ) throws -> Int {
         let fm = FileManager.default
@@ -184,7 +203,11 @@ public enum WeightImport {
                 at: source.appendingPathComponent(name),
                 to: staging.appendingPathComponent(name)
             )
-            try HubApiDownloader.llmDefault.hub.writeDownloadMetadata(
+            // This particular call writes to an explicit path, so the hub it
+            // hangs off does not change WHERE the metadata lands — but using
+            // the repo's own downloader keeps that a fact rather than a
+            // coincidence someone has to re-derive later.
+            try downloader(for: repoID).hub.writeDownloadMetadata(
                 commitHash: pin.revision,
                 etag: expected.sha256,
                 metadataPath: staging

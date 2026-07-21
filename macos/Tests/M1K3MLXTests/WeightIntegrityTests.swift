@@ -284,6 +284,28 @@ struct PinnedWeightsTests {
         #expect(PinnedWeights.pin(for: "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ") != nil)
     }
 
+    /// The two download bases genuinely diverge — LLM weights live under
+    /// Caches (`HubApiDownloader.llmDefault`), embedder weights under
+    /// Documents/huggingface (`.embedderDefault`), a 2.x layout preserved
+    /// byte-for-byte so existing caches keep working. An import that assumed
+    /// one base for everything would install the embedder somewhere the
+    /// loader never looks: a silent no-op that then re-downloads.
+    @Test("each pinned repo declares which download base it belongs to")
+    func everyPinnedRepoHasADownloadBase() {
+        #expect(PinnedWeights.downloadBase(for: "mlx-community/gemma-4-12B-it-4bit") == .llm)
+        #expect(PinnedWeights.downloadBase(for: "mlx-community/Qwen3-4B-Instruct-2507-4bit") == .llm)
+        #expect(
+            PinnedWeights.downloadBase(for: "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ") == .embedder
+        )
+    }
+
+    @Test("every pinned repo has a base, so none can silently default to the wrong directory")
+    func noPinnedRepoLacksABase() {
+        for repo in PinnedWeights.all.keys {
+            #expect(PinnedWeights.downloadBase(for: repo) != nil, "\(repo) declares no download base")
+        }
+    }
+
     @Test("an unknown repo has no pin — spikes and A/B overrides stay loadable")
     func unknownRepoUnpinned() {
         #expect(PinnedWeights.pin(for: "mlx-community/some-experimental-quant") == nil)

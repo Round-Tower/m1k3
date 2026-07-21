@@ -13,9 +13,18 @@
 //  Signed: Kev + claude-fable-5, 2026-07-13, Confidence 0.85 (a straight move
 //  — every footer/copy verbatim except the Status retitle). Prior: Kev +
 //  claude-opus-4-8 (SettingsView.swift lineage, 2026-06-06).
+//  Review: Kev + claude-opus-4-8, 2026-07-21 — added the "Import weights"
+//  section: the UI entry point for WeightImport (M1K3MLX, shipped this
+//  session with no caller until now). All the deciding lives in
+//  WeightImportDisplay (M1K3MLX, TDD'd); this view is a thin switch over its
+//  Outcome plus the NSOpenPanel/Task glue. Confidence 0.85 (compiles + app
+//  builds; the render is verify-by-launch like every SwiftUI change in this
+//  file family — see WeightImportDisplay.swift for what's actually pinned).
 //
 
+import AppKit
 import M1K3Inference
+import M1K3MLX
 import M1K3WhisperKit
 import SwiftUI
 
@@ -27,6 +36,10 @@ struct AdvancedSettingsPane: View {
     @State private var issueReported = false
     @State private var issueTruncated = false
     @State private var whatHappened = ""
+    /// Which brain a folder import targets. Defaults to the first tier that
+    /// actually has weights to import (Mini never appears — see
+    /// `WeightImportDisplay.importableTiers`).
+    @State private var weightImportTier: BrainTier = WeightImportDisplay.importableTiers().first ?? .lil
 
     var body: some View {
         Form {
@@ -162,6 +175,8 @@ struct AdvancedSettingsPane: View {
                                value: env.providerAvailable ? "Ready" : "Unavailable")
             }
 
+            weightImportSection
+
             Section {
                 TextField("What happened? (optional)", text: $whatHappened, axis: .vertical)
                     .lineLimit(2 ... 5)
@@ -222,5 +237,81 @@ struct AdvancedSettingsPane: View {
                 + "Agent Log.")
                 .font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    /// "I already have these weights" — verify a folder against M1K3's
+    /// pinned digests and install it so the app never re-downloads. The
+    /// picker only ever offers tiers with something to import
+    /// (`WeightImportDisplay.importableTiers` — Mini is Apple Foundation
+    /// Models and never appears). The actual run is off the main actor
+    /// (`AppEnvironment.importWeights` — it hashes gigabytes); this section
+    /// just disables itself while `.importing` and switches on the result.
+    private var weightImportSection: some View {
+        Section {
+            Picker("Brain", selection: $weightImportTier) {
+                ForEach(WeightImportDisplay.importableTiers()) { tier in
+                    Text(tier.displayName).tag(tier)
+                }
+            }
+            .accessibilityLabel("Which brain's weights to import")
+            .disabled(env.weightImportState == .importing)
+
+            Button("Import weights from a folder…", action: presentWeightImportPanel)
+                .buttonStyle(.glass)
+                .disabled(env.weightImportState == .importing)
+                .accessibilityLabel("Import \(weightImportTier.displayName) weights from a folder")
+
+            weightImportStatusRow
+        } header: {
+            Text("Import weights")
+        } footer: {
+            Text("Already have a model's weights on disk from somewhere else? Point M1K3 at "
+                + "the folder — it verifies every file against the digests pinned in this "
+                + "build before installing, and refuses anything that doesn't match.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var weightImportStatusRow: some View {
+        switch env.weightImportState {
+        case .idle:
+            EmptyView()
+        case .importing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Verifying and installing…")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+        case let .result(.success(message)):
+            Label(message, systemImage: "checkmark.circle.fill")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.green)
+        case let .result(.failure(message)):
+            // Verbatim from WeightImportDisplay — these strings (the tamper
+            // one especially) were worded deliberately; not truncated, not
+            // softened.
+            Label(message, systemImage: "exclamationmark.triangle")
+                .symbolRenderingMode(.hierarchical)
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
+    }
+
+    /// Directory-only NSOpenPanel (not `.fileImporter`: this needs
+    /// `canChooseDirectories`/`canChooseFiles` precision that SwiftUI's
+    /// modifier doesn't cleanly expose). Modal on the button's own click —
+    /// no separate `isPresented` state to track.
+    private func presentWeightImportPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Import"
+        panel.message = "Choose the folder holding \(weightImportTier.displayName)'s weights."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await env.importWeights(from: url, for: weightImportTier) }
     }
 }
