@@ -92,7 +92,7 @@ struct ModelCacheIntegrityTests {
         return try! JSONSerialization.data(withJSONObject: ["weight_map": map])
     }
 
-    @Test("scan reads a real torn directory as torn — and heal deletes it")
+    @Test("scan reads a real torn directory as torn — and heal clears the load path")
     func scanAndHealTornDirectory() throws {
         let dir = try makeModelDir([
             "config.json": Data("{}".utf8),
@@ -102,7 +102,10 @@ struct ModelCacheIntegrityTests {
             "model-00001-of-00002.safetensors": Data(repeating: 1, count: 64),
             // shard 2 missing — the exact 2026-07-16 crash shape
         ])
-        defer { try? FileManager.default.removeItem(at: dir) }
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: ModelCacheIntegrity.quarantineURL(for: dir))
+        }
 
         guard case .torn = ModelCacheIntegrity.scan(directory: dir) else {
             Issue.record("expected torn scan")
@@ -112,8 +115,76 @@ struct ModelCacheIntegrityTests {
             Issue.record("expected torn heal verdict")
             return
         }
-        // The recovery: the directory is GONE, so HubApi re-downloads cleanly.
+        // The load path must be clear, so HubApi re-downloads cleanly.
         #expect(!FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    /// The change of policy, and the reason for it: a torn directory still
+    /// holds gigabytes the user paid bandwidth and time for. Deleting it bets
+    /// the whole download on the re-download succeeding — and weights live in
+    /// `Library/Caches`, which the system may purge under pressure, so "this
+    /// user needs the weights again" is a state the app can cause by itself.
+    /// Moving the partial aside keeps the recovery while keeping the bytes.
+    @Test("heal QUARANTINES a torn directory rather than destroying the bytes")
+    func healQuarantinesRatherThanDeletes() throws {
+        let dir = try makeModelDir([
+            "model.safetensors.index.json": indexJSON(
+                shards: ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]
+            ),
+            "model-00001-of-00002.safetensors": Data(repeating: 1, count: 64),
+        ])
+        let quarantine = ModelCacheIntegrity.quarantineURL(for: dir)
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: quarantine)
+        }
+
+        _ = ModelCacheIntegrity.healBeforeLoad(directory: dir)
+
+        #expect(!FileManager.default.fileExists(atPath: dir.path))
+        #expect(FileManager.default.fileExists(
+            atPath: quarantine.appendingPathComponent("model-00001-of-00002.safetensors").path
+        ))
+    }
+
+    /// Quarantine must be bounded. A second tear cannot be allowed to stack
+    /// another copy of a multi-GB partial beside the first.
+    @Test("a second tear replaces the quarantine instead of accumulating copies")
+    func quarantineIsBounded() throws {
+        let quarantineHolder = try makeModelDir(["stale.safetensors": Data(repeating: 9, count: 8)])
+        let dir = try makeModelDir([
+            "model.safetensors.index.json": indexJSON(shards: ["a.safetensors", "b.safetensors"]),
+            "a.safetensors": Data(repeating: 1, count: 64),
+        ])
+        let quarantine = ModelCacheIntegrity.quarantineURL(for: dir)
+        try? FileManager.default.removeItem(at: quarantine)
+        try FileManager.default.moveItem(at: quarantineHolder, to: quarantine)
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: quarantine)
+        }
+
+        _ = ModelCacheIntegrity.healBeforeLoad(directory: dir)
+
+        // The older quarantine is gone, replaced by this tear's partial.
+        #expect(!FileManager.default.fileExists(atPath: quarantine.appendingPathComponent("stale.safetensors").path))
+        #expect(FileManager.default.fileExists(atPath: quarantine.appendingPathComponent("a.safetensors").path))
+    }
+
+    @Test("reclaiming drops the quarantine once a good copy is in place")
+    func reclaimDropsQuarantine() throws {
+        let dir = try makeModelDir(["model.safetensors": Data(repeating: 1, count: 8)])
+        let quarantine = ModelCacheIntegrity.quarantineURL(for: dir)
+        try? FileManager.default.removeItem(at: quarantine)
+        try FileManager.default.createDirectory(at: quarantine, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: quarantine)
+        }
+
+        ModelCacheIntegrity.reclaimQuarantine(for: dir)
+
+        #expect(!FileManager.default.fileExists(atPath: quarantine.path))
     }
 
     @Test("heal leaves a complete directory alone")

@@ -176,6 +176,11 @@ public enum WeightIntegrityScan {
                 "verified \(repoID, privacy: .public) against pinned revision \(pin.revision, privacy: .public)"
             )
             writeReceipt(directory: directory, pin: pin)
+            // A verified copy is in place, so any partial `healBeforeLoad` set
+            // aside has done its job. This is the only moment the old bytes are
+            // provably no longer worth keeping — which is exactly why the
+            // reclaim hangs off verification rather than off the heal itself.
+            ModelCacheIntegrity.reclaimQuarantine(for: directory)
         }
     }
 

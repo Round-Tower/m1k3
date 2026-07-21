@@ -118,18 +118,80 @@ public enum ModelCacheIntegrity {
         return false
     }
 
+    /// Where a torn directory is moved aside to. A sibling, so it is never on
+    /// the load path, and a fixed name so quarantine can never accumulate more
+    /// than one copy per model.
+    public static func quarantineURL(for directory: URL) -> URL {
+        directory
+            .deletingLastPathComponent()
+            .appendingPathComponent(".m1k3-quarantine")
+            .appendingPathComponent(directory.lastPathComponent)
+    }
+
     /// The recovery: when the directory `loadContainer` is about to read is
-    /// torn, delete it so HubApi re-downloads cleanly — a fresh multi-GB fetch
-    /// beats a guaranteed process death. Returns the verdict for logging.
+    /// torn, get it off the load path so HubApi re-downloads cleanly.
+    ///
+    /// ⚠️ It is MOVED ASIDE, not deleted, and the distinction is not
+    /// fastidiousness. The original cut deleted the directory outright, which
+    /// bets a user's entire multi-GB download on the re-download succeeding —
+    /// while these weights live in `Library/Caches`, which the system may
+    /// purge under disk pressure, so the app can create the very "I need 6.7 GB
+    /// again" situation it is trying to recover from. It also sat awkwardly
+    /// beside `WeightIntegrity`'s tamper path, which refuses to destroy the
+    /// files it rejects on the grounds that they are evidence: the accidental
+    /// case was treated more harshly than the hostile one.
+    ///
+    /// Quarantine is bounded to one copy per model (a fixed sibling path, and
+    /// any previous quarantine is replaced), and cleared by `reclaimQuarantine`
+    /// once a good copy is verified in place. If the move fails — most likely
+    /// genuinely out of disk — it falls back to deleting, because clearing the
+    /// load path is what actually prevents the crash and must not be optional.
     @discardableResult
     public static func healBeforeLoad(directory: URL) -> Verdict {
         let result = scan(directory: directory)
-        if case let .torn(reason) = result {
+        guard case let .torn(reason) = result else { return result }
+
+        let quarantine = quarantineURL(for: directory)
+        let fm = FileManager.default
+        try? fm.removeItem(at: quarantine)
+        try? fm.createDirectory(
+            at: quarantine.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        do {
+            try fm.moveItem(at: directory, to: quarantine)
             integrityLog.fault(
-                "torn model cache at \(directory.lastPathComponent, privacy: .public) (\(reason, privacy: .public)) — deleting for a clean re-download (the alternative is the quantize fatalError)"
+                """
+                torn model cache at \(directory.lastPathComponent, privacy: .public) \
+                (\(reason, privacy: .public)) — moved aside for a clean re-download \
+                (the alternative is the quantize fatalError). The partial is kept until \
+                a good copy lands.
+                """
             )
-            try? FileManager.default.removeItem(at: directory)
+        } catch {
+            integrityLog.fault(
+                """
+                torn model cache at \(directory.lastPathComponent, privacy: .public) \
+                (\(reason, privacy: .public)) — could not quarantine \
+                (\(error.localizedDescription, privacy: .public)), deleting instead. \
+                Clearing the load path is not optional.
+                """
+            )
+            try? fm.removeItem(at: directory)
         }
         return result
+    }
+
+    /// Drop a model's quarantined partial. Called once a fresh copy has been
+    /// verified in place, which is the only moment the old bytes are provably
+    /// no longer worth keeping.
+    public static func reclaimQuarantine(for directory: URL) {
+        let quarantine = quarantineURL(for: directory)
+        guard FileManager.default.fileExists(atPath: quarantine.path) else { return }
+        integrityLog.notice(
+            "reclaiming quarantined partial for \(directory.lastPathComponent, privacy: .public)"
+        )
+        try? FileManager.default.removeItem(at: quarantine)
     }
 }
