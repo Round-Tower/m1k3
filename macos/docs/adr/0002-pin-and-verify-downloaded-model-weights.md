@@ -151,9 +151,19 @@ tampered with — this tool inverting the failure it exists to catch.
 
 **Good.** Onboarding no longer trusts a moving target. An upstream change to a
 shipped model becomes a visible, reviewed decision instead of a silent one. The
-retrieval embedder is covered by the same choke point at no extra cost. And
-because we now know what correct looks like, a second download source can be
-added safely — which is the next piece of work.
+retrieval embedder is covered by the same choke point at no extra cost.
+
+**And it makes the weights mirrorable by anyone.** Because verification is
+client-side and source-agnostic, a mirror never has to be trusted — the
+manifest is. So the same work that closes the integrity hole also removes the
+need for us to run a CDN to close the availability one: publishing the manifest
+(`weights-manifest.json`, plus `docs/MIRRORING_WEIGHTS.md`) lets a university,
+a company behind a locked-down network, or anyone on a bad connection host
+these bytes without our involvement. That is a docs page rather than an ops
+commitment, and it generalises further than a mirror we operate ourselves.
+
+The same property is what will later make a runtime fallback source safe to
+add, and it is why integrity had to come first.
 
 **Cost.** Promoting a brain now requires regenerating the manifest. This is
 deliberate friction on a step that changes what users execute, and the

@@ -264,9 +264,19 @@ model id is therefore **two** changes, not one:
 
 ```bash
 # 1. download + actually exercise the new checkpoint (pin bytes you have run)
-# 2. regenerate the manifest — cross-checks against HF, hard-stops on mismatch
+# 2. regenerate the manifests — cross-checks against HF, hard-stops on mismatch
 python3 macos/tools/weights/pin_weights.py
 ```
+
+That writes **two** files from the same data: `PinnedWeights.swift` (what the
+app enforces) and `weights-manifest.json` (the published, machine-readable
+twin — see [MIRRORING_WEIGHTS.md](MIRRORING_WEIGHTS.md)). Commit both; a
+published manifest that disagrees with what the app enforces is worse than
+publishing none. `--check` fails if either is stale.
+
+The script also refuses to pin unless the local snapshot's recorded commit
+matches the revision being pinned, so a stale local cache cannot silently
+produce a manifest that makes every honest download look tampered with.
 
 Add the repo to `SHIPPED_REPOS` in that script first. An unpinned repo still
 loads (`WeightIntegrity.Verdict.unpinned`), so **a forgotten re-pin fails open,

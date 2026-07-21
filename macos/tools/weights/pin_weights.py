@@ -68,6 +68,19 @@ SHIPPED_REPOS = {
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 OUT = REPO_ROOT / "macos/Sources/M1K3MLX/PinnedWeights.swift"
 
+# The same manifest in a form anything can read. Because verification is
+# client-side, publishing this is what makes it safe for ANYONE to mirror the
+# weights: a third party can serve the bytes without being trusted, since the
+# app checks them against digests that travel with our source. That is a docs
+# page instead of an ops commitment, and it is strictly more useful than a
+# mirror we run ourselves.
+JSON_OUT = REPO_ROOT / "macos/weights-manifest.json"
+
+# Deliberately NO generation timestamp in either output. A timestamp would make
+# `--check` report drift on every single run, and a drift check that always
+# cries wolf is one people learn to ignore.
+SCHEMA_VERSION = 1
+
 
 def sha256(path: pathlib.Path) -> str:
     h = hashlib.sha256()
@@ -233,28 +246,63 @@ def swift_literal(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
     return "\n".join(lines)
 
 
+def json_manifest(pins: dict[str, tuple[str, dict[str, dict]]]) -> str:
+    """The machine-readable twin of PinnedWeights.swift.
+
+    Kept byte-derived from the same `pins` structure as the Swift output so the
+    two can never disagree — a published manifest that drifts from what the app
+    actually enforces would be worse than publishing nothing.
+    """
+    document = {
+        "schemaVersion": SCHEMA_VERSION,
+        "about": (
+            "sha256 digests and pinned revisions for the model weights M1K3 downloads. "
+            "The app verifies every downloaded or imported file against these before "
+            "loading it, so any host can serve these bytes without being trusted. "
+            "See macos/docs/MIRRORING_WEIGHTS.md."
+        ),
+        "repos": {
+            repo: {
+                "revision": revision,
+                "files": {
+                    name: {"size": meta["size"], "sha256": meta["sha256"]}
+                    for name, meta in sorted(files.items())
+                },
+            }
+            for repo, (revision, files) in sorted(pins.items())
+        },
+    }
+    return json.dumps(document, indent=2, sort_keys=False) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--check",
         action="store_true",
-        help="verify and report drift without rewriting the manifest",
+        help="verify and report drift without rewriting the manifests",
     )
     args = parser.parse_args()
 
     print("Pinning shipped model weights (local bytes, cross-checked against HF):")
     pins = {repo: collect(repo, cache) for repo, cache in SHIPPED_REPOS.items()}
-    generated = swift_literal(pins)
+    outputs = {OUT: swift_literal(pins), JSON_OUT: json_manifest(pins)}
 
     if args.check:
-        current = OUT.read_text() if OUT.exists() else ""
-        if current != generated:
-            sys.exit("DRIFT: PinnedWeights.swift is stale — re-run without --check")
-        print("PinnedWeights.swift is up to date.")
+        stale = [
+            path.relative_to(REPO_ROOT)
+            for path, generated in outputs.items()
+            if (path.read_text() if path.exists() else "") != generated
+        ]
+        if stale:
+            names = ", ".join(str(path) for path in stale)
+            sys.exit(f"DRIFT: {names} stale — re-run without --check")
+        print("Manifests are up to date.")
         return
 
-    OUT.write_text(generated)
-    print(f"\nWrote {OUT.relative_to(REPO_ROOT)}")
+    for path, generated in outputs.items():
+        path.write_text(generated)
+        print(f"Wrote {path.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":
