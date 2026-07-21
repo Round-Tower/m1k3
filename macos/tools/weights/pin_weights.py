@@ -55,10 +55,15 @@ SHIPPED_REPOS = {
     "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": EMBEDDER_CACHE,
 }
 
-# Mirrors BrainWeightsFetcher.weightPatterns / upstream modelDownloadPatterns.
-# Pin exactly what we fetch: pinning a file we never download is noise, and
-# fetching a file we never pinned is a hole.
-SUFFIXES = (".safetensors", ".json", ".jinja")
+# Deliberately NO suffix filter. An earlier cut mirrored mlx-swift-lm's
+# `modelDownloadPatterns` as a hardcoded tuple, which security review flagged
+# as silent-drift bait: those patterns are `package`-scoped so we cannot assert
+# against them, and an upstream bump adding a file type (a SentencePiece
+# `*.model`, say) would ship it unpinned with no test going red.
+#
+# Pinning every real file in the snapshot removes the coupling instead of
+# guarding it. The directory already contains exactly what the patterns
+# fetched, so this is a no-op today and self-correcting tomorrow.
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 OUT = REPO_ROOT / "macos/Sources/M1K3MLX/PinnedWeights.swift"
@@ -100,8 +105,6 @@ def collect(repo: str, cache: pathlib.Path) -> tuple[str, dict[str, dict]]:
     confirmed = 0
     for path in sorted(directory.rglob("*")):
         if not path.is_file() or path.name.startswith(".") or ".cache" in path.parts:
-            continue
-        if not path.name.endswith(SUFFIXES):
             continue
         rel = str(path.relative_to(directory))
         digest = sha256(path)
