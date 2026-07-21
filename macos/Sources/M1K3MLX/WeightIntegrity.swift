@@ -98,6 +98,10 @@ public enum WeightIntegrity {
         case verified
         /// Pinned files not on disk yet — a download in progress, benign.
         case incomplete(missing: [String])
+        /// Files present that could NOT be read or hashed. Not an accusation,
+        /// but not a pass either: we do not know what these bytes are, so the
+        /// load must fail closed rather than proceed on an unchecked file.
+        case unverifiable(files: [String])
         /// Files present whose bytes disagree with the manifest. Refuse.
         case tampered(files: [String])
     }
@@ -184,16 +188,28 @@ public enum WeightIntegrity {
     /// Ordering rule: tampering outranks incompleteness. A half-downloaded
     /// directory that ALSO contains one wrong file is an attack in progress,
     /// not a slow download, and must not be reported as the benign case.
+    /// `unreadable` names pinned files that ARE on disk but could not be read
+    /// or hashed. Keeping that distinct from absence is load-bearing: the
+    /// first cut folded both into "not in `observed`", so an unreadable file
+    /// took the benign in-flight path and the load proceeded having never
+    /// confirmed its bytes. The code could tell confirmed-missing from
+    /// confirmed-wrong, but had no way to say "couldn't check".
     public static func verdict(
         pin: Pin?,
-        observed: [String: ObservedFile]
+        observed: [String: ObservedFile],
+        unreadable: Set<String> = []
     ) -> Verdict {
         guard let pin else { return .unpinned }
 
         var missing: [String] = []
         var tampered: [String] = []
+        var unverifiable: [String] = []
 
         for (name, expected) in pin.files {
+            if unreadable.contains(name) {
+                unverifiable.append(name)
+                continue
+            }
             guard let actual = observed[name] else {
                 missing.append(name)
                 continue
@@ -203,7 +219,10 @@ public enum WeightIntegrity {
             }
         }
 
+        // Severity order: a known-wrong file is the worst news, then one we
+        // could not check, then one that simply has not arrived yet.
         if !tampered.isEmpty { return .tampered(files: tampered.sorted()) }
+        if !unverifiable.isEmpty { return .unverifiable(files: unverifiable.sorted()) }
         if !missing.isEmpty { return .incomplete(missing: missing.sorted()) }
         return .verified
     }
@@ -225,6 +244,33 @@ public struct WeightTamperError: Error, CustomStringConvertible, Sendable {
         Refusing to load \(repoID): downloaded weights do not match the digests \
         pinned in this build (\(files.joined(separator: ", "))). The files were \
         NOT deleted — they are evidence. This is not retried on purpose.
+        """
+    }
+}
+
+/// Thrown when a pinned file is present but could not be read or hashed, so
+/// its bytes were never confirmed.
+///
+/// Distinct from `WeightTamperError` on purpose. This is not an accusation —
+/// a permissions problem or a disk hiccup is far likelier than an attack — but
+/// it still fails closed, because "we could not check" must never take the
+/// same silent path as "it has not downloaded yet". Naming it separately keeps
+/// the tamper `.fault` meaningful: if that one ever fires, it means something.
+public struct WeightUnverifiableError: Error, CustomStringConvertible, Sendable {
+    public let repoID: String
+    public let files: [String]
+
+    public init(repoID: String, files: [String]) {
+        self.repoID = repoID
+        self.files = files
+    }
+
+    public var description: String {
+        """
+        Could not verify \(repoID): \(files.joined(separator: ", ")) could not be \
+        read to check against the pinned digests. Not loading unverified weights. \
+        Most likely a file-permission or disk problem — retry, and if it persists \
+        the model cache may need clearing.
         """
     }
 }

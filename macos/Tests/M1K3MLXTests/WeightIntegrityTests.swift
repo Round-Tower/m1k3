@@ -126,6 +126,52 @@ struct WeightIntegrityTests {
     }
 }
 
+struct UnverifiableFileTests {
+    private static let pin = WeightIntegrity.Pin(
+        revision: "aaaabbbbccccdddd",
+        files: [
+            "model.safetensors": .init(size: 2_263_022_417, sha256: "2a73c6c2"),
+            "config.json": .init(size: 938, sha256: "574349e5"),
+        ]
+    )
+
+    /// Review catch. The first cut could only tell "confirmed missing" from
+    /// "confirmed wrong" — a file that was PRESENT but unreadable (permissions,
+    /// an I/O error mid-hash) simply never made it into `observed`, so it read
+    /// as absent, which is the benign `.incomplete` path, and the load
+    /// proceeded with that file's bytes never confirmed. "Couldn't check" is
+    /// not "nothing to check": it has to fail closed.
+    @Test("a present but unreadable file is unverifiable, never silently incomplete")
+    func unreadableIsNotIncomplete() {
+        let verdict = WeightIntegrity.verdict(
+            pin: Self.pin,
+            observed: ["config.json": .init(size: 938, sha256: "574349e5")],
+            unreadable: ["model.safetensors"]
+        )
+        #expect(verdict == .unverifiable(files: ["model.safetensors"]))
+    }
+
+    @Test("tampering still outranks unverifiability — a known-wrong file is the worse news")
+    func tamperOutranksUnverifiable() {
+        let verdict = WeightIntegrity.verdict(
+            pin: Self.pin,
+            observed: ["config.json": .init(size: 938, sha256: "WRONG")],
+            unreadable: ["model.safetensors"]
+        )
+        #expect(verdict == .tampered(files: ["config.json"]))
+    }
+
+    @Test("unverifiability outranks incompleteness — an unreadable file is not a slow download")
+    func unverifiableOutranksIncomplete() {
+        let verdict = WeightIntegrity.verdict(
+            pin: Self.pin,
+            observed: [:],
+            unreadable: ["config.json"]
+        )
+        #expect(verdict == .unverifiable(files: ["config.json"]))
+    }
+}
+
 struct RevisionResolutionTests {
     private static let pin = WeightIntegrity.Pin(
         revision: "73bcf09092aa277861d5a191b989b666f7f32e8f",

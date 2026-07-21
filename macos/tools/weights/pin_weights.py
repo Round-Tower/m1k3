@@ -94,6 +94,37 @@ def collect(repo: str, cache: pathlib.Path) -> tuple[str, dict[str, dict]]:
 
     revision = hf_json(f"https://huggingface.co/api/models/{repo}/revision/main")["sha"]
 
+    # ⚠️ The revision and the digests MUST come from the same commit.
+    #
+    # The revision above is whatever `main` points at RIGHT NOW, while the
+    # digests below are computed from whatever is sitting in the local cache,
+    # which may be older. Pin those together and a user's fresh download at the
+    # pinned revision legitimately differs from the pinned digests — a FALSE
+    # tamper verdict on honest content, and per "refuse, don't heal" it never
+    # recovers on its own. That is this tool inverting the exact failure it
+    # exists to catch, and non-LFS files (chat_template.jinja above all) have
+    # no cross-check that would notice.
+    #
+    # HubApi records the commit each file was fetched at, so we can simply ask.
+    local_commits = {
+        path.read_text().splitlines()[0].strip()
+        for path in (directory / ".cache/huggingface/download").rglob("*.metadata")
+    }
+    if not local_commits:
+        sys.exit(
+            f"FATAL {repo}: no HubApi download metadata under {directory}, so the "
+            "local snapshot's commit cannot be established.\n"
+            "Re-download through the app so provenance is recorded, then re-run."
+        )
+    if local_commits != {revision}:
+        sys.exit(
+            f"FATAL {repo}: local snapshot is at {sorted(local_commits)} but main is "
+            f"now {revision}.\n"
+            "Pinning today's revision beside yesterday's bytes would make every "
+            "user's honest download look tampered with. Refresh the local copy "
+            "(and re-run your evals against it) before pinning."
+        )
+
     published: dict[str, str] = {}
     for entry in hf_json(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"):
         if entry.get("type") != "file":

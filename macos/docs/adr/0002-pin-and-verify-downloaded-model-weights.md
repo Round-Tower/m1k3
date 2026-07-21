@@ -34,10 +34,25 @@ because verification is what makes a second source safe to add at all.
 
 Two mechanisms, both required:
 
-**1. Pin the revision.** `HuggingFaceBridge.download` resolves an absent
-revision to the pinned commit SHA for that repo, not to `main`. An explicit
-caller-supplied revision still wins, so the eval harness and A/B overrides are
-unaffected.
+**1. Pin the revision — and the pin beats the caller.** For any repo in the
+manifest, `HuggingFaceBridge.download` resolves to the pinned commit SHA and
+ignores whatever revision the caller passed.
+
+That precedence is not incidental, and the obvious alternative is a trap we
+fell into on the first cut. Deferring to the caller (`requested ?? pin`) looks
+more polite and is what the first version shipped — but mlx-swift-lm's
+`resolve` passes `configuration.id`'s revision *explicitly*, and
+`ModelConfiguration.Identifier.id` defaults it to the literal string `"main"`
+rather than nil. So the caller was never nil in production, the pin was never
+consulted, and every real model load still tracked a moving branch. Only
+`BrainWeightsFetcher`'s background pre-stage — the single nil-passing caller —
+honoured it. Security review caught this; see `WeightIntegrity.resolveRevision`.
+
+A `"main"` arriving from a third-party default parameter is indistinguishable
+from a deliberate request, so honouring callers means honouring that default,
+which means having no pin at all. Eval A/B overrides are unaffected because
+they use *different model ids*, which are unpinned. Shipping different weights
+for a pinned repo is a manifest change, by design.
 
 **2. Verify the bytes against a manifest committed to this repo.**
 `PinnedWeights.swift` carries sha256 digests and sizes for every file we
@@ -77,13 +92,31 @@ and logs `.fault`. The error is not a transient network error, so `withRetry`'s
 default `isTransientNetworkError` will not match it and the load fails to
 `AppReadiness.failed` instead of looping.
 
-### Absent is not tampered
+### Receipts live outside the model directory
 
-Mid-download, most pinned files are absent — overwhelmingly the common case.
-Treating that as an attack would alarm on every first run. Absent is
-`.incomplete`; present-but-wrong is `.tampered`. Tampering outranks
-incompleteness, so a half-downloaded directory containing one wrong file still
-alarms.
+The download globs include `*.json`, so anything the remote repo contains lands
+inside the model directory — including a file named like a receipt. Since
+`PinnedWeights.swift` ships in a public repo, the revision and sizes a forged
+receipt would need are public too. Receipts therefore live in a sibling
+directory the downloader never writes to, which removes the forgery surface
+rather than relying on a filename that happens not to match today's glob list
+(a list upstream controls, not us).
+
+### Absent, unreadable, and tampered are three different things
+
+Absent is a download in flight. Tampered is a file whose bytes disagree with
+the manifest. **Unreadable is neither** — a file that is present but cannot be
+read or hashed, whether from permissions or an I/O error.
+
+The first cut had only two of these, so an unreadable file simply never made it
+into the observed set and took the benign in-flight path, and the load
+proceeded having never confirmed its bytes. "Couldn't check" now fails closed
+as `.unverifiable`, with its own error type so a tamper `.fault` keeps meaning
+something. Severity orders as tampered > unverifiable > incomplete.
+
+Mid-download, most pinned files are absent — overwhelmingly the common case,
+and treating that as an attack would alarm on every first run, which trains
+people to ignore alarms.
 
 ### Unpinned repos still load
 
@@ -95,11 +128,24 @@ evaluation loop — which is how both brains got chosen — becomes unusable.
 ### Cost
 
 Hashing ~6.7 GB on every launch would be indefensible, so a verified directory
-writes a receipt naming the revision and the sizes it verified; a later load
-with the same revision and unchanged sizes skips hashing. This is sound under
-the stated threat model — a poisoned *download*, not local tampering. An
-attacker who can already write inside our sandbox container owns the app
-regardless of what we hash.
+writes a receipt and a later load skips hashing when the revision matches and
+every pinned file is unchanged. This is sound under the stated threat model — a
+poisoned *download*, not local tampering. An attacker who can already write
+inside our sandbox container owns the app regardless of what we hash.
+
+"Unchanged" means size **and modification time**, and the mtime half is
+load-bearing. The first cut recorded only the revision and sizes — both read
+straight from `PinnedWeights`, so the receipt compared source constants to
+themselves and could never disagree. After one verified run, a same-size file
+was trusted forever without being hashed again, and shard sizes are near-fixed
+by tensor shapes and quantisation, so that is a plausible swap. It also needed
+no local access, which put it inside the threat model rather than outside it.
+A genuine re-download bumps mtime, which forces a fresh hash.
+
+The generator enforces the matching half of this: it refuses to pin unless the
+local snapshot's recorded commit equals the revision being pinned. Pinning
+today's revision beside older local bytes would make an honest download look
+tampered with — this tool inverting the failure it exists to catch.
 
 ## Consequences
 
