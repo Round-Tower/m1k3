@@ -36,6 +36,16 @@ struct WeightIntegrityScanTests {
             try Data(contents.utf8).write(to: url.appendingPathComponent(name))
         }
 
+        /// Mimics HubApi's own provenance record: `<dir>/.cache/huggingface/
+        /// download/<file>.metadata`, whose first line is the commit the file
+        /// was fetched at.
+        func writeDownloadMetadata(commit: String, for name: String) throws {
+            let dir = url.appendingPathComponent(".cache/huggingface/download")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("\(commit)\netag\n0\n".utf8)
+                .write(to: dir.appendingPathComponent("\(name).metadata"))
+        }
+
         deinit { try? FileManager.default.removeItem(at: url) }
     }
 
@@ -163,6 +173,52 @@ struct WeightIntegrityScanTests {
         """
         try sandbox.write(forged, to: ".m1k3-weight-receipt.json")
         try sandbox.write(forged, to: "m1k3-weight-receipt.json")
+
+        #expect(throws: WeightTamperError.self) {
+            try WeightIntegrityScan.enforce(directory: sandbox.url, pin: pin, repoID: "org/repo")
+        }
+    }
+
+    /// A false accusation is its own kind of failure.
+    ///
+    /// After a re-pin (a brain promotion), a user still holding the PREVIOUS
+    /// release's weights has bytes that legitimately disagree with the new
+    /// manifest. Online that is invisible — the new revision downloads first.
+    /// But `download`'s offline and auth-required exits hand back the stale
+    /// local copy and then verify it, so an honest user launching without a
+    /// network got `WeightTamperError`: a supply-chain accusation, on a path
+    /// deliberately built never to self-heal.
+    ///
+    /// HubApi records the commit each file was fetched at, which distinguishes
+    /// "these are last release's weights" from "these bytes are wrong".
+    @Test("weights from a previous pinned revision read as stale, never as tampering")
+    func staleRevisionIsNotTampering() throws {
+        let sandbox = try Sandbox()
+        try sandbox.write("old weights", to: "model.safetensors")
+        try sandbox.writeDownloadMetadata(commit: "0000000000000000000000000000000000000000", for: "model.safetensors")
+
+        // The pin expects different bytes at a different commit — exactly the
+        // post-promotion state.
+        let pin = Self.pin(
+            revision: "1111111111111111111111111111111111111111",
+            contents: ["model.safetensors": "new weights"]
+        )
+
+        #expect(throws: WeightsStaleError.self) {
+            try WeightIntegrityScan.enforce(directory: sandbox.url, pin: pin, repoID: "org/repo")
+        }
+    }
+
+    @Test("bytes that disagree at the PINNED commit are still tampering")
+    func wrongBytesAtPinnedCommitStillTamper() throws {
+        let sandbox = try Sandbox()
+        try sandbox.write("poisoned!", to: "model.safetensors")
+        try sandbox.writeDownloadMetadata(commit: "1111111111111111111111111111111111111111", for: "model.safetensors")
+
+        let pin = Self.pin(
+            revision: "1111111111111111111111111111111111111111",
+            contents: ["model.safetensors": "weights!!"]
+        )
 
         #expect(throws: WeightTamperError.self) {
             try WeightIntegrityScan.enforce(directory: sandbox.url, pin: pin, repoID: "org/repo")

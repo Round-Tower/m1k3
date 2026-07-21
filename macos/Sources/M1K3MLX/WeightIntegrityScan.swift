@@ -110,6 +110,20 @@ public enum WeightIntegrityScan {
 
         if trustsReceipt(directory: directory, pin: pin) { return }
 
+        // Before judging the bytes, check WHICH revision they are. A cache from
+        // an earlier release disagrees with the manifest for an entirely honest
+        // reason, and calling that tampering would have this feature accuse its
+        // own users every time a brain is promoted and someone launches offline.
+        if let local = recordedCommit(in: directory), local != pin.revision {
+            integrityLog.notice(
+                """
+                \(repoID, privacy: .public) cache is at \(local, privacy: .public) but this \
+                build pins \(pin.revision, privacy: .public) — stale, not tampered.
+                """
+            )
+            throw WeightsStaleError(repoID: repoID, localRevision: local, pinnedRevision: pin.revision)
+        }
+
         var observed: [String: WeightIntegrity.ObservedFile] = [:]
         var unreadable: Set<String> = []
         for (name, expected) in pin.files {
@@ -217,6 +231,34 @@ public enum WeightIntegrityScan {
             result[name] = .init(size: size, modified: modified.timeIntervalSinceReferenceDate)
         }
         return result
+    }
+
+    /// The commit the local snapshot was fetched at, per HubApi's own download
+    /// metadata (`<dir>/.cache/huggingface/download/<file>.metadata`, first
+    /// line). Nil when there is no metadata, or when files disagree about it —
+    /// a mixed directory has no single answer, so it falls through to the
+    /// digest check rather than guessing.
+    ///
+    /// Reading another library's cache layout is a real coupling, taken
+    /// deliberately: it is the only place the provenance of these bytes is
+    /// recorded, and without it "old release" and "wrong bytes" are
+    /// indistinguishable. `tools/weights/pin_weights.py` reads the same file
+    /// for the same reason.
+    static func recordedCommit(in directory: URL) -> String? {
+        let metadataRoot = directory.appendingPathComponent(".cache/huggingface/download")
+        guard let walker = FileManager.default.enumerator(
+            at: metadataRoot, includingPropertiesForKeys: nil
+        ) else { return nil }
+
+        var commits: Set<String> = []
+        for case let url as URL in walker where url.pathExtension == "metadata" {
+            guard
+                let text = try? String(contentsOf: url, encoding: .utf8),
+                let first = text.split(separator: "\n").first
+            else { continue }
+            commits.insert(String(first).trimmingCharacters(in: .whitespaces))
+        }
+        return commits.count == 1 ? commits.first : nil
     }
 
     private static func fileSize(at url: URL) -> Int? {

@@ -248,6 +248,41 @@ public struct WeightTamperError: Error, CustomStringConvertible, Sendable {
     }
 }
 
+/// Thrown when the cache holds a DIFFERENT pinned revision's weights — last
+/// release's model, not an attack.
+///
+/// This exists so a promotion cannot slander its own users. After a re-pin, a
+/// cache still holding the previous release's bytes legitimately disagrees
+/// with the new manifest. Online that never surfaces, because the new revision
+/// downloads first — but `download`'s offline and auth-required exits hand
+/// back the stale local copy and verify THAT, so an honest user launching
+/// without a network was met with a supply-chain accusation, permanently,
+/// on a path built never to self-heal.
+///
+/// Distinguishing the two is possible because HubApi records the commit each
+/// file was fetched at, so "wrong bytes for this commit" and "right bytes for
+/// a different commit" are separable facts.
+public struct WeightsStaleError: Error, CustomStringConvertible, Sendable {
+    public let repoID: String
+    public let localRevision: String
+    public let pinnedRevision: String
+
+    public init(repoID: String, localRevision: String, pinnedRevision: String) {
+        self.repoID = repoID
+        self.localRevision = localRevision
+        self.pinnedRevision = pinnedRevision
+    }
+
+    public var description: String {
+        """
+        The cached weights for \(repoID) are from an earlier release \
+        (\(localRevision.prefix(12))), but this build expects \
+        \(pinnedRevision.prefix(12)). Nothing is wrong with them — they are \
+        simply out of date. Reconnect and they will update.
+        """
+    }
+}
+
 /// Thrown when a pinned file is present but could not be read or hashed, so
 /// its bytes were never confirmed.
 ///
