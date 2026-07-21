@@ -158,6 +158,14 @@ struct ModelCacheIntegrityTests {
         ])
         let quarantine = ModelCacheIntegrity.quarantineURL(for: dir)
         try? FileManager.default.removeItem(at: quarantine)
+        // Create the quarantine ROOT explicitly. Locally this test passed
+        // without it only because a sibling test had already created the
+        // directory — an order dependency a clean CI runner exposed
+        // immediately. Never let a fixture rely on another test's leftovers.
+        try FileManager.default.createDirectory(
+            at: quarantine.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try FileManager.default.moveItem(at: quarantineHolder, to: quarantine)
         defer {
             try? FileManager.default.removeItem(at: dir)
