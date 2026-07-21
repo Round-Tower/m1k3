@@ -35,6 +35,15 @@
 //  added to the .json arm by EXACT size id (config model_type "qwen3" +
 //  <tool_call> template verified against HF; the Qwen3.6-based 27B deliberately
 //  stays nil → ReAct floor). Live-proven same day: CHATEVAL tool-use 5/5 native.
+//  Review: Kev + claude-fable-5, 2026-07-20, Confidence 0.8 — added
+//  `seedPrefixTokenCount(tools:)`, the measurement seam PromptSizeStage uses to
+//  size the persona+tool-spec KV-seed for a native (Big) turn — the chunk a
+//  code-review bot found missing entirely from the flat-prompt instrument
+//  (the seed is never a `prompt: String`, so nothing there could have counted
+//  it). Thin reuse of `personaPrefixSnapshot`/`prefixInputs`, no new render
+//  path; untested by design, same as its sibling `tokenCount`/
+//  `templatedTokenCount` (Metal-backed, verify-by-launch — see M1K3MLXTests'
+//  PersonaPrefixCacheTests, which tests only the pure cache-key half).
 
 import Foundation
 import M1K3Inference
@@ -376,6 +385,30 @@ extension MLXGemmaProvider: ToolCallingProvider {
             mlxToolLog.notice(
                 "persona prefix warm skipped [\(model, privacy: .public)]: \(String(describing: error), privacy: .public)"
             )
+        }
+    }
+
+    /// The exact token cost of the persona+tool-spec KV-seed for `tools` — what
+    /// `makeToolTurnSession` prefills ONCE per (model × tools × persona),
+    /// before a single per-turn token is sent. This is the measurement seam
+    /// for the prompt-size instrument (PromptSizeStage): the seed is never
+    /// rendered as a flat prompt string, so it can't be counted by splitting
+    /// one — but it IS available without running a generation. Reuses
+    /// `personaPrefixSnapshot`/`MLXToolMapping.prefixInputs`, the same
+    /// derivation `warmPersonaPrefix` and the live turn use, so this can't
+    /// drift from what the model actually saw. `nil` when the prefix can't be
+    /// built (best-effort, same contract as `personaPrefixSnapshot`) — never a
+    /// confident zero.
+    public func seedPrefixTokenCount(tools: [ToolDefinition]) async -> Int? {
+        do {
+            let container = try await ensureLoaded()
+            let inputs = MLXToolMapping.prefixInputs(for: tools)
+            guard let seed = await personaPrefixSnapshot(
+                container: container, specs: inputs.specs, toolNames: inputs.toolNames
+            ) else { return nil }
+            return seed.tokenCount
+        } catch {
+            return nil
         }
     }
 

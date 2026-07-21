@@ -582,6 +582,51 @@ public final class MLXGemmaProvider: InferenceProvider, ModelPreloading, @unchec
             return "template debug failed: \(error)"
         }
     }
+
+    /// REAL token count for `text` through this model's own tokenizer — the
+    /// ground truth the prompt-size instrument exists to produce, replacing the
+    /// char≈token estimates that every context guarantee currently rests on
+    /// (HistoryBudgetPolicy assumes 3.5 chars/token and names real counting as
+    /// a deferred [SPIKE]; DocumentChunker implies 4).
+    ///
+    /// Deliberately RAW `encode` — no chat template. Two reasons: the caller
+    /// measures prompt SECTIONS, and per-section template overhead would be
+    /// counted once per section, inflating the total and breaking the
+    /// "components re-sum to the whole" invariant; and the wrapper's cost is
+    /// itself measurable as (templated whole − sum of raw sections).
+    ///
+    /// nil (never 0) when the model can't be loaded — a confident zero would
+    /// read as "measured, and free".
+    public func tokenCount(_ text: String) async -> Int? {
+        do {
+            let container = try await ensureLoaded()
+            return await container.perform { context in
+                context.tokenizer.encode(text: text).count
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    /// Token count for `text` WITH the chat template applied — the true cost of
+    /// a fully-assembled prompt, wrapper included. Pair with `tokenCount` to
+    /// attribute the difference to template overhead.
+    public func templatedTokenCount(_ text: String) async -> Int? {
+        do {
+            let container = try await ensureLoaded()
+            return try await container.perform { context in
+                let noTools: [[String: any Sendable]]? = nil
+                let noContext: [String: any Sendable]? = nil
+                return try context.tokenizer.applyChatTemplate(
+                    messages: [["role": "user", "content": text]],
+                    tools: noTools,
+                    additionalContext: noContext
+                ).count
+            }
+        } catch {
+            return nil
+        }
+    }
 }
 
 // MARK: - Reasoning-template normalisation

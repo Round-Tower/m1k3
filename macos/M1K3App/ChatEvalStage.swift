@@ -179,7 +179,9 @@ enum ChatEvalStage {
     }
 
     /// ReAct-floor / native-dialect palette (LocalAgent path — AFM ReAct + MLX).
-    private static var toolPalette: [any AgentTool] {
+    /// Internal (not private): PromptSizeStage reuses this SAME palette so its
+    /// measured prompt carries the real production tool spec, not an empty one.
+    static var toolPalette: [any AgentTool] {
         toolSpecs.map {
             StubTool(name: $0.name, description: $0.description,
                      cannedOutput: hardStubs ? $0.hardCanned : $0.canned)

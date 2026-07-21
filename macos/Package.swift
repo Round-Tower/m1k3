@@ -304,7 +304,13 @@ let package = Package(
             // link them — tools are injected by the app layer), so a pin test
             // guards the names against drift. Same pattern as M1K3MLXTests →
             // M1K3Chat (the 116-F1 cross-module equality pin).
-            dependencies: ["M1K3Chat", "M1K3KnowledgeTools", "M1K3AgentTools"],
+            // M1K3Eval is TEST-ONLY for the same reason: the prompt-size
+            // instrument's section markers (PromptMarker.live) are strings
+            // duplicated out of M1K3Chat's rendered prompt, and M1K3Eval must
+            // not depend on M1K3Chat. A pin test here renders the REAL prompt
+            // and asserts every marker still matches, so a wording pass fails
+            // loudly instead of silently zeroing a section in the report.
+            dependencies: ["M1K3Chat", "M1K3KnowledgeTools", "M1K3AgentTools", "M1K3Eval"],
             path: "Tests/M1K3ChatTests"
         ),
         // Leaf bridge (Chat + Memory only): DistilledFactGraphAdapter, the
