@@ -41,6 +41,62 @@ packages:
   M1K3:
     path: .
 
+# The shared mobile shell (iOS + visionOS): one source list, one dependency set,
+# so the two platform targets can't silently drift apart. This was a pair of YAML
+# anchors hanging off M1K3iOS until 2026-07-20 — promoted to a real XcodeGen
+# template when the targets first needed to DIVERGE (app-icon assets: Icon
+# Composer can't author visionOS icons, so each carries its own). A target's own
+# `sources:` are appended to the template's, which is what makes that possible.
+targetTemplates:
+  MobileShell:
+    sources:
+      - path: M1K3iOSApp
+      # Shared, cross-platform look-and-feel lifted from the macOS app target:
+      # the procedural pixel-face avatar (now #if-guarded for UIColor), its
+      # emotion→colour map (pure SwiftUI), the reading modes (ReadingMode enum +
+      # ReadingText renderer — zero AppKit), the Silkscreen pixel brand font,
+      # and the OpenDyslexic faces the dyslexia reading mode needs
+      # (BundledFonts.register() already lists them; it silently skips missing
+      # resources, so the .otf lines below are load-bearing).
+      - path: M1K3App/AvatarView.swift
+      - path: M1K3App/AvatarEmotion+SwiftUI.swift
+      - path: M1K3App/PixelFont.swift
+      - path: M1K3App/ReadingMode.swift
+      - path: M1K3App/ReadingText.swift
+      - path: M1K3App/Resources/Fonts/Silkscreen-Regular.ttf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/OpenDyslexic-Regular.otf
+        buildPhase: resources
+      - path: M1K3App/Resources/Fonts/OpenDyslexic-Bold.otf
+        buildPhase: resources
+    dependencies:
+      # The portable package pipeline (protocol-seam first, so it cross-compiles):
+      # RAG chat + knowledge + memory + inference + MLX + the agent tool loop +
+      # the avatar. NO Kokoro/WhisperKit/Calls/MCP — voice + the in-app server are
+      # Phase-B. M1K3Preview links transitively via M1K3AgentTools.
+      - package: M1K3
+        product: M1K3Chat
+      - package: M1K3
+        product: M1K3Knowledge
+      - package: M1K3
+        product: M1K3Memory
+      - package: M1K3
+        product: M1K3MemoryChatBridge
+      - package: M1K3
+        product: M1K3Inference
+      - package: M1K3
+        product: M1K3Agent
+      - package: M1K3
+        product: M1K3AgentTools
+      - package: M1K3
+        product: M1K3KnowledgeTools
+      - package: M1K3
+        product: M1K3MLX
+      - package: M1K3
+        product: M1K3Avatar
+
 targets:
   M1K3:
     type: application
@@ -150,57 +206,24 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
-    sources: &mobileShellSources
-      - path: M1K3iOSApp
-      # Shared, cross-platform look-and-feel lifted from the macOS app target:
-      # the procedural pixel-face avatar (now #if-guarded for UIColor), its
-      # emotion→colour map (pure SwiftUI), the reading modes (ReadingMode enum +
-      # ReadingText renderer — zero AppKit), the Silkscreen pixel brand font,
-      # and the OpenDyslexic faces the dyslexia reading mode needs
-      # (BundledFonts.register() already lists them; it silently skips missing
-      # resources, so the .otf lines below are load-bearing).
-      - path: M1K3App/AvatarView.swift
-      - path: M1K3App/AvatarEmotion+SwiftUI.swift
-      - path: M1K3App/PixelFont.swift
-      - path: M1K3App/ReadingMode.swift
-      - path: M1K3App/ReadingText.swift
-      - path: M1K3App/Resources/Fonts/Silkscreen-Regular.ttf
+    templates: [MobileShell]
+    # Icon Composer (.icon) app icon — the SAME document the Mac target ships.
+    # icon.json declares "squares": "shared", so one Icon Composer file authors
+    # both the macOS and iOS square icons; referenced as a single file so
+    # XcodeGen doesn't recurse into the bundle, and actool compiles it via
+    # APPICON_NAME below. This deliberately lives on the target rather than in
+    # the MobileShell template: Icon Composer has NO visionOS support (Xcode
+    # 26.x), so the visionOS sibling carries a hand-built layered image stack
+    # instead. The icon asset is the one thing the two mobile targets can't share.
+    sources:
+      - path: M1K3.icon
+        type: file
         buildPhase: resources
-      - path: M1K3App/Resources/Fonts/Silkscreen-Bold.ttf
-        buildPhase: resources
-      - path: M1K3App/Resources/Fonts/OpenDyslexic-Regular.otf
-        buildPhase: resources
-      - path: M1K3App/Resources/Fonts/OpenDyslexic-Bold.otf
-        buildPhase: resources
-    dependencies: &mobileShellDeps
-      # The portable package pipeline (protocol-seam first, so it cross-compiles):
-      # RAG chat + knowledge + memory + inference + MLX + the agent tool loop +
-      # the avatar. NO Kokoro/WhisperKit/Calls/MCP — voice + the in-app server are
-      # Phase-B. M1K3Preview links transitively via M1K3AgentTools.
-      - package: M1K3
-        product: M1K3Chat
-      - package: M1K3
-        product: M1K3Knowledge
-      - package: M1K3
-        product: M1K3Memory
-      - package: M1K3
-        product: M1K3MemoryChatBridge
-      - package: M1K3
-        product: M1K3Inference
-      - package: M1K3
-        product: M1K3Agent
-      - package: M1K3
-        product: M1K3AgentTools
-      - package: M1K3
-        product: M1K3KnowledgeTools
-      - package: M1K3
-        product: M1K3MLX
-      - package: M1K3
-        product: M1K3Avatar
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.ios
         PRODUCT_NAME: M1K3iOS
+        ASSETCATALOG_COMPILER_APPICON_NAME: M1K3
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -222,8 +245,17 @@ targets:
     type: application
     platform: visionOS
     deploymentTarget: "26.0"
-    sources: *mobileShellSources
-    dependencies: *mobileShellDeps
+    templates: [MobileShell]
+    # Hand-authored layered app icon. Icon Composer has NO visionOS support as of
+    # Xcode 26.x, so the shared M1K3.icon the Mac/iOS targets use CANNOT author
+    # this one — visionOS needs a 1-3 layer `.solidimagestack` (each layer a
+    # 1024×1024 PNG; the Back layer MUST be fully opaque or actool errors), and
+    # the system applies the circular mask + parallax depth itself. Deliberately
+    # lives OUTSIDE M1K3iOSApp/ so the template's `- path: M1K3iOSApp` doesn't
+    # sweep a vision-idiom asset into the iOS bundle. Regenerated by
+    # tools/icons/build_visionos_icon.py from the same wordmark art.
+    sources:
+      - path: M1K3visionOS/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.m1k3.visionos

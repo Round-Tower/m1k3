@@ -215,8 +215,39 @@ for it), so on-device run is verify-owed, same as the spike.
   streaming feel, first-run onboarding, AFM availability on real AI-off hardware.
 - **Phase D — Spatial (visionOS flagship)** — volumetric avatar + walkable memory
   constellation. The shell renders as a window today; `m1k3Glass` is the seam to upgrade.
-- **Phase E — Distribution** — iOS/visionOS icons, entitlements, an Xcode Cloud →
-  TestFlight lane (the current lane is macOS-only), device-tune the memory cap.
+- **Phase E — Distribution** — ~~iOS/visionOS icons~~ (DONE 2026-07-20, see below),
+  entitlements, an Xcode Cloud → TestFlight lane (the current lane is macOS-only),
+  device-tune the memory cap.
+
+### App icons (done 2026-07-20)
+
+Both mobile shells shipped iconless until now. The two targets take **different**
+routes, which is why the app-icon asset is the one thing the shared `MobileShell`
+XcodeGen template does *not* carry — each target adds its own:
+
+| Target | Asset | Wiring |
+|---|---|---|
+| `M1K3iOS` | `M1K3.icon` — the **same** Icon Composer document the Mac ships (`icon.json` declares `"squares": "shared"`) | `ASSETCATALOG_COMPILER_APPICON_NAME: M1K3` |
+| `M1K3visionOS` | `M1K3visionOS/Assets.xcassets` — a hand-built `AppIcon.solidimagestack` | `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` (Xcode's default) |
+
+**Icon Composer cannot author visionOS icons** as of Xcode 26.x — it covers iOS,
+iPadOS, macOS and watchOS only. visionOS needs a layered image stack: 1–3 layers,
+each a 1024×1024 PNG, where the **Back layer must be fully opaque** (actool errors
+otherwise) and the Middle/Front layers stay transparent so the system can render the
+parallax depth. The circular mask is applied by the system — layers are not pre-cropped.
+
+The visionOS layers are generated, not hand-drawn: `tools/icons/build_visionos_icon.py`
+derives them from the same wordmark art the Mac icon uses (isolating the leading pixel
+"M" as the monogram, plus a soft bloom on the middle layer). Re-run it to regenerate.
+
+Verified by build, not just by compile: the iOS bundle carries `CFBundleIconName = M1K3`
+with a compiled `M1K3.iconstack`; the visionOS `Assets.car` carries
+`AppIcon/{Back,Middle,Front}/Content` at LayerIndex 0/1/2.
+
+> Note: the `MobileShell` target template (`project.yml`) replaced a pair of YAML
+> anchors on `M1K3iOS` at the same time — a target's own `sources:` are *appended* to
+> the template's, which is what lets the two platforms diverge on icons while still
+> sharing one source list and dependency set.
 - Trivial: the entry file is still named `M1K3iOSHarnessApp.swift` (now holds
   `struct M1K3iOSApp`); a rename is cosmetic and deferred to avoid re-verifying both builds.
 

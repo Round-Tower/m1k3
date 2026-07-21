@@ -69,6 +69,20 @@ extension AppEnvironment {
             || defaults.bool(forKey: soundEffectsEnabledKey)
     }
 
+    /// The dial-up "connecting…" loop (played while a brain downloads/loads) —
+    /// ON by default, but SEPARATELY switchable. It's the one earcon that can
+    /// grate (a sustained ~29s loop, not a blip), so it earns its own opt-out.
+    /// Nested under the master `soundEffects` gate: BOTH must be on to play.
+    static let dialUpSoundEnabledKey = "soundEffects.dialUp"
+
+    /// Live read of the dial-up preference (absent key = ON). Read at the load
+    /// call site to decide whether to start the loop.
+    var dialUpSoundEnabled: Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: Self.dialUpSoundEnabledKey) == nil
+            || defaults.bool(forKey: Self.dialUpSoundEnabledKey)
+    }
+
     /// One-time wiring (from init): speech lifecycle drives the avatar's speaking
     /// state, and the word-timing callbacks feed the karaoke highlight. Lives here
     /// (with speak/stopSpeaking) so the swap façade re-applies everything onto

@@ -48,7 +48,9 @@ struct SpeechEntryGateTests {
                 group.addTask {
                     await gate.run {
                         await tracker.enter()
-                        for _ in 0 ..< 5 { await Task.yield() }
+                        for _ in 0 ..< 5 {
+                            await Task.yield()
+                        }
                         await tracker.leave()
                     }
                 }
@@ -112,7 +114,9 @@ struct SpeechEntryGateTests {
                 group.addTask { await provider.claimEntry() }
             }
             var collected: [Int] = []
-            for await generation in group { collected.append(generation) }
+            for await generation in group {
+                collected.append(generation)
+            }
             return collected
         }
 

@@ -45,6 +45,13 @@
 //  itself, enforcing persona rule 3 in code. Narrow leak-class classifier,
 //  NOT the general pre-generation router rejected 2026-06-12 — a miss falls
 //  back to the prompt rule (today's behaviour); boundaries pinned in tests.
+//  Review: Kev + claude-fable-5, 2026-07-20, Confidence 0.85 — the grounding-
+//  size safety cap: right after GroundingGate.partition, GroundingBudget.fit
+//  caps the combined chunks+memories to ~1100 tokens (measured, PR #65) before
+//  anything renders them, closing the near-miss where gemma-4's grounded-Q
+//  worst case landed at 2998/3000 reserve tokens. No-op when the provider
+//  isn't `TokenCounting` (AFM/Mini). A `.notice` breadcrumb fires only when
+//  the cap actually changed something — see GroundingBudget.swift.
 
 import Foundation
 import M1K3Agent
@@ -207,8 +214,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
         // — and the corpus-reaching tools are withheld from the turn below.
         // Persona rule 3 states this policy; the gate enforces it in code.
         let isSelfQuery = SelfQueryGate.isSelfQuery(question)
-        let chunks: [ChunkHit]
-        let memories: [ChunkHit]
+        var chunks: [ChunkHit]
+        var memories: [ChunkHit]
         if isSelfQuery {
             Self.log.notice("self-query gate: retrieval skipped, corpus tools withheld")
             (chunks, memories) = ([], [])
@@ -231,6 +238,47 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             (chunks, memories) = GroundingGate.partition(retrieved)
             Self.logGateDecision(retrieved: retrieved, kept: chunks + memories)
         }
+        // Grounding-size safety cap (2026-07-20): both lanes above are injected
+        // VERBATIM and UNTRUNCATED downstream (groundingBody). On gemma-4-12B
+        // ("Big"), PR #65's prompt-size instrument measured the grounded-Q worst
+        // case at 2998 of a 3000-token reserve — 2 tokens of headroom before
+        // `RotatingKVCache(8192)` silently rotates the persona/grounding head out
+        // mid-turn with NO error. GroundingBudget caps at the source instead; it's
+        // a no-op when this turn's provider has no tokenizer (AFM/Mini self-manage
+        // their own windows).
+        let beforeCapChunks = chunks
+        let beforeCapMemories = memories
+        let countTokens: (String) async -> Int? = { [provider] text in
+            await (provider as? TokenCounting)?.tokenCount(text)
+        }
+        (chunks, memories) = await GroundingBudget.fit(
+            chunks: chunks, memories: memories,
+            tokenBudget: GroundingBudget.defaultTokenBudget,
+            countTokens: countTokens
+        )
+        if chunks != beforeCapChunks || memories != beforeCapMemories {
+            // Only pay for the extra tokenizer passes when the cap actually did
+            // something — the common case (nothing dropped, or no tokenizer at
+            // all) never recomputes totals just to decide whether to log.
+            let beforeTokens = await GroundingBudget.totalTokens(
+                chunks: beforeCapChunks, memories: beforeCapMemories, countTokens: countTokens
+            )
+            let afterTokens = await GroundingBudget.totalTokens(
+                chunks: chunks, memories: memories, countTokens: countTokens
+            )
+            Self.log.notice(
+                """
+                grounding cap: units \(beforeCapChunks.count + beforeCapMemories.count)\
+                →\(chunks.count + memories.count), tokens \(beforeTokens)→\(afterTokens)
+                """
+            )
+        }
+        // Snapshot as `let` for the closure below — `chunks`/`memories` are
+        // `var` only so the cap above could reassign them; a `var` capture in
+        // a Task closure is a Swift 6 sending-risk error even though nothing
+        // mutates them again after this point.
+        let cappedChunks = chunks
+        let cappedMemories = memories
         // Resolve the tool list once per turn; the routing rules must match
         // what's actually callable (no advertising a disabled web_search).
         // On a self-query turn the retrieval tools are withheld entirely —
@@ -244,8 +292,8 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
                 await runAgentTurn(
                     question: question,
                     images: images,
-                    chunks: chunks,
-                    memories: memories,
+                    chunks: cappedChunks,
+                    memories: cappedMemories,
                     history: history,
                     tools: tools,
                     onActivity: onActivity,
@@ -259,7 +307,7 @@ public struct AgentRAGResponder: RAGResponding, Sendable {
             continuation.onTermination = { _ in turnTask.cancel() }
         }
         // Memory hits ride along as sources so the UI shows their provenance.
-        return (chunks + memories, stream)
+        return (cappedChunks + cappedMemories, stream)
     }
 
     /// Grounding for the think-phase decision counts BOTH retrieval lanes: a

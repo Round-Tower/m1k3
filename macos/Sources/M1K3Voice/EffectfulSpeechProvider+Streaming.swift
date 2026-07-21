@@ -158,7 +158,9 @@ extension EffectfulSpeechProvider {
 /// see `speak(stream:)`.
 private final class StreamOutcome: @unchecked Sendable {
     var spoke: Bool
-    init(spoke: Bool) { self.spoke = spoke }
+    init(spoke: Bool) {
+        self.spoke = spoke
+    }
 }
 
 /// Per-utterance state for one chunked playback: pending-buffer accounting, the

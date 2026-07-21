@@ -22,14 +22,15 @@
 
 import M1K3Knowledge
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct DocumentsView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
 
     @State private var docs: [KnowledgeItem] = []
     @State private var quarantinedDocs: [KnowledgeItem] = []
     @State private var showInternal = false
+    @State private var showImporter = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,9 +73,22 @@ struct DocumentsView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .frame(width: 480, height: 480)
-        .glassBackdrop()
         .onAppear { reload() }
+        // Import lives WITH Documents now (not only on the chat toolbar,
+        // which vanished on this destination) — the same file types the
+        // global drop-to-ingest accepts. Reloads after each ingest so a
+        // freshly-added doc appears without leaving the view.
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.pdf, .plainText, .text, .rtf],
+            allowsMultipleSelection: true
+        ) { result in
+            if case let .success(urls) = result {
+                for url in urls {
+                    Task { await env.ingest(url: url); reload() }
+                }
+            }
+        }
     }
 
     private var header: some View {
@@ -94,8 +108,11 @@ struct DocumentsView: View {
             .buttonStyle(.borderless)
             .help(showInternal ? "Hide internal items" : "Show quarantined items")
             .foregroundStyle(showInternal ? Color.primary : Color.secondary)
-            Button("Done") { dismiss() }
-                .buttonStyle(.glassProminent)
+            Button { showImporter = true } label: {
+                Label("Import", systemImage: "doc.badge.plus")
+            }
+            .buttonStyle(.borderless)
+            .help("Add a PDF or text file")
         }
         .padding(16)
     }

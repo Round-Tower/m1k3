@@ -9,6 +9,11 @@
 //  fixture pattern as RAGResponderTests.
 //
 //  Signed: Kev + claude-fable-5, 2026-06-09, Confidence 0.85, Prior: Unknown
+//  Review: Kev + claude-fable-5, 2026-07-20, Confidence 0.85 — the grounding-
+//  size safety cap wires through `provider as? TokenCounting`; added
+//  CountingProvider (a TokenCounting-conforming scripted provider with an
+//  inflated per-character cost) to prove the cap reaches the REAL rendered
+//  prompt end-to-end, not just the pure GroundingBudgetTests unit tests.
 
 import Foundation
 import M1K3Agent
@@ -55,6 +60,49 @@ private final class AgentScriptedProvider: InferenceProvider, @unchecked Sendabl
             }
             continuation.finish()
         }
+    }
+
+    var allPrompts: [String] {
+        lock.withLock { prompts }
+    }
+}
+
+/// A `TokenCounting`-conforming provider — proves the grounding-size safety
+/// cap actually reaches the wiring, not just the pure `GroundingBudgetTests`.
+/// `costPerCharacter` inflates the fake per-character cost well past
+/// `GroundingBudget.defaultTokenBudget` so even one short ingested chunk
+/// (a handful of real characters) forces the cap to engage without needing
+/// a huge fixture.
+private final class CountingProvider: InferenceProvider, TokenCounting, @unchecked Sendable {
+    let name = "counting"
+    let isAvailable = true
+
+    private let response: String
+    private let costPerCharacter: Int
+    private let lock = NSLock()
+    private var prompts: [String] = []
+
+    init(response: String, costPerCharacter: Int = 1) {
+        self.response = response
+        self.costPerCharacter = costPerCharacter
+    }
+
+    func generate(prompt: String) async throws -> String {
+        lock.withLock { prompts.append(prompt) }
+        return response
+    }
+
+    func generateStreaming(prompt: String) -> AsyncStream<String> {
+        lock.withLock { prompts.append(prompt) }
+        let text = response
+        return AsyncStream { continuation in
+            continuation.yield(text)
+            continuation.finish()
+        }
+    }
+
+    func tokenCount(_ text: String) async -> Int? {
+        text.count * costPerCharacter
     }
 
     var allPrompts: [String] {
@@ -299,6 +347,49 @@ struct AgentRAGResponderTests {
         #expect(!sources.isEmpty)
         let firstPrompt = try #require(provider.allPrompts.first)
         #expect(firstPrompt.contains("fixed tool search_knowledge"))
+    }
+
+    // MARK: - Grounding-size safety cap (wiring)
+
+    @Test("grounding cap engages end-to-end when the provider conforms to TokenCounting")
+    func groundingCapReachesTheRealPrompt() async throws {
+        let (store, embedder) = try await ingestedStore()
+        // The inflated per-character cost pushes even this fixture's one short
+        // ingested chunk well past GroundingBudget.defaultTokenBudget (1100),
+        // so the single top chunk must survive TRUNCATED, not dropped.
+        let provider = CountingProvider(response: "CONCLUSION: ok", costPerCharacter: 50)
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [FixedTool(name: "search_knowledge", response: "hit")] }
+        )
+
+        let (sources, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
+        _ = await collect(stream)
+
+        #expect(sources.count == 1)
+        let firstPrompt = try #require(provider.allPrompts.first)
+        #expect(firstPrompt.contains(" …[truncated]"))
+    }
+
+    @Test("grounding cap is a no-op for providers that don't conform to TokenCounting")
+    func groundingCapIsNoOpWithoutTokenCounting() async throws {
+        let (store, embedder) = try await ingestedStore()
+        let provider = AgentScriptedProvider(["CONCLUSION: The seal failed."])
+        let responder = AgentRAGResponder(
+            store: store, embedder: embedder, provider: provider,
+            toolsProvider: { [FixedTool(name: "search_knowledge", response: "hit")] }
+        )
+
+        let (sources, stream) = try await responder.answerStreaming(
+            "What hydraulic seal failed on the conveyor under load?"
+        )
+        _ = await collect(stream)
+
+        let firstPrompt = try #require(provider.allPrompts.first)
+        #expect(!firstPrompt.contains("…[truncated]"))
+        #expect(!sources.isEmpty)
     }
 
     @Test("the history budget provider scales the replayed conversation in the prompt (long context)")

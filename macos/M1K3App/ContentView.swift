@@ -30,14 +30,18 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var draft = ""
-    @State private var showDocuments = false
-    @State private var showMemories = false
-    @State private var showCalls = false
-    @State private var showHistory = false
+    /// Which sidebar destination is showing. `.conversation(_)` is transient —
+    /// picking a past conversation switches to it and snaps back to `.chat`
+    /// (see the onChange in `body`). Not persisted: every launch opens on
+    /// `.chat`, matching the app's existing "chat is the front door" rule.
+    @State private var sidebarSelection: SidebarSelection? = .chat
+    /// Sidebar column visibility, bridged to NavigationSplitViewVisibility
+    /// (not directly UserDefaults-storable) — same persisted-Bool shape as
+    /// `avatarDisplay` below.
+    @AppStorage(AppEnvironment.sidebarVisibleKey) private var sidebarVisible = true
     @State private var showImporter = false
     @State private var showAttachmentImporter = false
     @State private var pendingAttachments: [ImageAttachment] = []
@@ -65,20 +69,50 @@ struct ContentView: View {
     /// edge (~90+ chars/line reads badly, and worse in the dyslexia modes).
     private static let chatContentMaxWidth: CGFloat = 760
 
+    /// Bridges the persisted Bool to NavigationSplitView's own visibility
+    /// type (not directly storable). `.automatic` — not `.all` — is the
+    /// "shown" value: it's what gives the sidebar native auto-collapse/
+    /// overlay behavior on a narrow window (the same adaptive behavior
+    /// Mail/Xcode's own sidebars get), without any hand-rolled width
+    /// tracking. The system manages narrow-width collapsing internally and
+    /// doesn't round-trip through this setter for it, so a pure
+    /// width-driven collapse never touches the persisted preference — only
+    /// an explicit toggle-button tap (which DOES set `.detailOnly`) does.
+    private var columnVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding(
+            get: { sidebarVisible ? .automatic : .detailOnly },
+            set: { sidebarVisible = $0 != .detailOnly }
+        )
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            avatarPanel
-            transcript
-                // Bottom chrome rides a safeAreaInset (not a VStack sibling) so
-                // the transcript SCROLLS UNDER the bar and its material blurs
-                // real content — the macOS bar idiom, matching the toolbar's
-                // material above. followLatest's .bottom anchor automatically
-                // lands above the inset.
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+        NavigationSplitView(columnVisibility: columnVisibility) {
+            SidebarView(selection: $sidebarSelection)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
+        } detail: {
+            switch sidebarSelection {
+            case .documents:
+                NavigationStack { DocumentsView() }
+            case .memories:
+                NavigationStack { MemoriesView() }
+            case .calls:
+                NavigationStack { CallsView() }
+            default:
+                // .chat, the transient .conversation(_) (see onChange below),
+                // and nil all read as chat.
+                chatDetail
+            }
         }
-        .animation(.spring(duration: 0.35), value: showsBrainUpgradeNudge)
-        .animation(.spring(duration: 0.35), value: avatarDisplay)
-        .frame(minWidth: 600, minHeight: 520)
+        // A conversation row is a PICK, not a destination to linger on —
+        // switch to it and immediately return the selection to .chat so the
+        // sidebar highlight settles on "Chat", matching what's now showing.
+        .onChange(of: sidebarSelection) { _, newValue in
+            if case let .conversation(id) = newValue {
+                env.chat.switchTo(id)
+                sidebarSelection = .chat
+            }
+        }
+        .frame(minWidth: 480, minHeight: 480)
         // Voice-first as a FULL-WINDOW hero: the avatar fills the window with the
         // karaoke line + controls floating on glass, covering the chat while
         // active (the chat answer still lands in the transcript underneath). This
@@ -99,10 +133,67 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: env.isVoiceModeActive)
+        .background {
+            // Ambient drifting orbs while capturing audio (recording / dictation)
+            // or throughout voice-first mode, fading in over the glass. Sits
+            // above the window glass, behind content. Global (not chat-scoped):
+            // a call recording can be started from CallsView too, and stays in
+            // flight while browsing elsewhere.
+            if showsAmbientBackdrop {
+                AudioCaptureBackdrop().transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
+        .glassBackdrop()
+        .dropDestination(for: URL.self) { urls, _ in
+            for url in urls {
+                Task { await env.ingest(url: url) }
+            }
+            return true
+        } isTargeted: { isDropTargeted = $0 }
+        .overlay { if isDropTargeted { DropHintView() } }
+        .toolbar { toolbarContent }
+        // A trailing side panel for quick review of links and files, beside the
+        // conversation. Native macOS inspector — resizable, collapsible chrome.
+        // State lives in env.review so chat-chips / MCP / the agent can drive it.
+        .inspector(isPresented: Binding(
+            get: { env.review.isPresented },
+            set: { env.review.isPresented = $0 }
+        )) {
+            ReviewPanel(review: env.review)
+                .inspectorColumnWidth(min: 320, ideal: 420, max: 720)
+                // Fill the inspector to the WINDOW top: under .hiddenTitleBar the
+                // column otherwise insets below the toolbar strip and the window
+                // background shows as a black band above the panel.
+                .ignoresSafeArea(.container, edges: .top)
+        }
+    }
+
+    /// The chat surface: avatar + transcript + input, plus everything only
+    /// meaningful while actively chatting (the readiness gate, the fading top
+    /// scrim, the avatar backdrop, top banners, the record-call consent
+    /// dialog, image-attach/document importers). Extracted so the
+    /// NavigationSplitView's other three destinations (Documents/Memories/
+    /// Calls) don't inherit chat-only chrome.
+    private var chatDetail: some View {
+        VStack(spacing: 0) {
+            avatarPanel
+            transcript
+                // Bottom chrome rides a safeAreaInset (not a VStack sibling) so
+                // the transcript SCROLLS UNDER the bar and its material blurs
+                // real content — the macOS bar idiom, matching the toolbar's
+                // material above. followLatest's .bottom anchor automatically
+                // lands above the inset.
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+        }
+        .animation(.spring(duration: 0.35), value: showsBrainUpgradeNudge)
+        .animation(.spring(duration: 0.35), value: avatarDisplay)
+        .frame(minWidth: 600, minHeight: 520)
         // Global readiness gate: until the active brain is actually loaded into
         // memory, swallow interaction behind a loading/failure surface — a turn
         // fired against still-downloading weights is the "interacted before ready"
-        // latent bug. The toolbar (incl. Settings) stays reachable as chrome.
+        // latent bug. Chat-scoped: browsing Documents/Memories/Calls/past
+        // conversations doesn't need the active brain warm, only firing a turn does.
         .overlay {
             if !env.isReady {
                 ModelGateView(
@@ -121,15 +212,6 @@ struct ContentView: View {
         // didSet that would otherwise kick the load). Idempotent.
         .task { await env.warmUpSelectedBrainOnLaunch() }
         .background {
-            // Ambient drifting orbs while capturing audio (recording / dictation)
-            // or throughout voice-first mode, fading in over the glass. Sits
-            // above the window glass, behind content.
-            if showsAmbientBackdrop {
-                AudioCaptureBackdrop().transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.45), value: showsAmbientBackdrop)
-        .background {
             // Opt-in: the avatar as a full-window backdrop behind the glass
             // bubbles. Standard chat mode only — voice mode has its own hero. It
             // recedes reactively while you read/type so text stays legible.
@@ -139,15 +221,6 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: avatarDisplay)
-        .glassBackdrop()
-        .dropDestination(for: URL.self) { urls, _ in
-            for url in urls {
-                Task { await env.ingest(url: url) }
-            }
-            return true
-        } isTargeted: { isDropTargeted = $0 }
-        .overlay { if isDropTargeted { DropHintView() } }
-        .toolbar { toolbarContent }
         // Faded top chrome, mirroring the bottom bar: a gradient-masked
         // material scrim over the titlebar region that dissolves downward —
         // no hard system band (toolbarBackground can't fade; this overlay
@@ -171,32 +244,6 @@ struct ContentView: View {
                     .ignoresSafeArea(edges: .top)
                     .allowsHitTesting(false)
             }
-        }
-        .sheet(isPresented: $showDocuments) {
-            DocumentsView().environment(env)
-        }
-        .sheet(isPresented: $showMemories) {
-            MemoriesView().environment(env)
-        }
-        .sheet(isPresented: $showCalls) {
-            CallsView().environment(env)
-        }
-        .sheet(isPresented: $showHistory) {
-            HistoryView().environment(env)
-        }
-        // A trailing side panel for quick review of links and files, beside the
-        // conversation. Native macOS inspector — resizable, collapsible chrome.
-        // State lives in env.review so chat-chips / MCP / the agent can drive it.
-        .inspector(isPresented: Binding(
-            get: { env.review.isPresented },
-            set: { env.review.isPresented = $0 }
-        )) {
-            ReviewPanel(review: env.review)
-                .inspectorColumnWidth(min: 320, ideal: 420, max: 720)
-                // Fill the inspector to the WINDOW top: under .hiddenTitleBar the
-                // column otherwise insets below the toolbar strip and the window
-                // background shows as a black band above the panel.
-                .ignoresSafeArea(.container, edges: .top)
         }
         .confirmationDialog("Record this call?", isPresented: $showConsentDialog, titleVisibility: .visible) {
             Button("Record once") { Task { await env.affirmConsentAndRecord(scope: .once) } }
@@ -508,18 +555,9 @@ struct ContentView: View {
                     .accessibilityLabel("Attach image")
                 }
 
-                Button { env.chat.startNewConversation() } label: {
-                    Image(systemName: "square.and.pencil")
-                        .imageScale(.large)
-                        .fontWeight(.semibold)
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .disabled(env.chat.messages.isEmpty || env.chat.isResponding)
-                .help("Start a fresh conversation — this one stays in History")
-                .accessibilityLabel("New chat")
-
+                // New chat lives in the sidebar now (its toolbar pencil +
+                // ⌘N) — a second identical pencil here was pure duplication
+                // once the sidebar owned conversation lifecycle.
                 if env.isListening {
                     // The bail-out: discard the dictation WITHOUT sending. The
                     // mic stays tap-to-send (muscle memory); this is the exit
@@ -699,44 +737,88 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Our own sidebar toggle, pulled OUT of the sidebar's collapsible
+        // toolbar into the always-present window toolbar so show/hide is
+        // reachable in both states (replaces the auto one removed above).
+        // Removing the automatic toggle ALSO drops its ⌃⌘S binding, so we
+        // re-bind the standard Toggle-Sidebar shortcut here on our button.
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.snappy) { sidebarVisible.toggle() }
+            } label: {
+                Label("Toggle Sidebar", systemImage: "sidebar.leading")
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            .help("Show or hide the sidebar (⌃⌘S)")
+        }
         ToolbarItem(placement: .principal) {
             statusIndicator
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                if env.isVoiceModeActive {
-                    env.exitVoiceMode()
+            // Voice mode + the chat-specific actions only make sense while the
+            // chat destination is showing — Documents/Memories/Calls get just
+            // the always-relevant items (Agent Log, Review panel, Settings).
+            if isChatSelected {
+                voiceModeButton
+                chatToolbarItems
+            }
+            alwaysToolbarItems
+        }
+    }
+
+    /// True for `.chat`, the transient `.conversation(_)` (see the onChange in
+    /// `body`), and `nil` — false only for the three other destinations.
+    private var isChatSelected: Bool {
+        switch sidebarSelection {
+        case .documents, .memories, .calls: false
+        default: true
+        }
+    }
+
+    private var voiceModeButton: some View {
+        Button {
+            if env.isVoiceModeActive {
+                env.exitVoiceMode()
+            } else {
+                env.enterVoiceMode()
+            }
+        } label: {
+            // Text + icon until the user has entered voice mode once — the
+            // headline feature earns a label while it's undiscovered, then
+            // steps back to the toolbar's default icon-only rendering.
+            Group {
+                let label = Label(
+                    env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
+                    systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
+                )
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.default, value: env.isVoiceModeActive)
+                if hasEnteredVoiceMode {
+                    label
                 } else {
-                    env.enterVoiceMode()
-                }
-            } label: {
-                // Text + icon until the user has entered voice mode once — the
-                // headline feature earns a label while it's undiscovered, then
-                // steps back to the toolbar's default icon-only rendering.
-                Group {
-                    let label = Label(
-                        env.isVoiceModeActive ? "Leave voice mode" : "Voice mode",
-                        systemImage: env.isVoiceModeActive ? "person.wave.2.fill" : "person.wave.2"
-                    )
-                    .contentTransition(.symbolEffect(.replace))
-                    .animation(.default, value: env.isVoiceModeActive)
-                    if hasEnteredVoiceMode {
-                        label
-                    } else {
-                        label.labelStyle(.titleAndIcon)
-                    }
+                    label.labelStyle(.titleAndIcon)
                 }
             }
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-            .disabled(!env.isVoiceModeActive
-                && (!env.canDictate || env.chat.isResponding || env.isListening || !env.isReady))
-            .help(env.isVoiceModeActive
-                ? "Back to the chat (⌘⇧V)"
-                : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
-            // The chat is co-visible under the voice dock now, so its actions stay
-            // reachable (they used to hide for the full-window body-swap).
-            chatToolbarItems
         }
+        .keyboardShortcut("v", modifiers: [.command, .shift])
+        .disabled(!env.isVoiceModeActive
+            && (!env.canDictate || env.chat.isResponding || env.isListening || !env.isReady))
+        .help(env.isVoiceModeActive
+            ? "Back to the chat (⌘⇧V)"
+            : "Talk with M1K3 — hands-free conversation (⌘⇧V)")
+    }
+
+    /// Reachable from every sidebar destination, not just Chat. Settings and
+    /// Agent Log moved to the sidebar's Workspace section (Kev's call — they
+    /// were crowding the toolbar into its ">>" overflow); the Review panel
+    /// stays toolbar-only since it isn't a sidebar destination (see
+    /// SidebarView's own comment on why).
+    private var alwaysToolbarItems: some View {
+        Button { env.review.isPresented.toggle() } label: {
+            Label("Review panel", systemImage: "sidebar.right")
+        }
+        .help("Open a side panel to review links and files (⌥⌘R)")
+        .keyboardShortcut("r", modifiers: [.command, .option])
     }
 
     /// Brain hot-swap + the "currently using X" indicator. This intentionally
@@ -787,22 +869,15 @@ struct ContentView: View {
             : "Switch brain — currently \(env.selectedBrain.displayName)")
     }
 
-    /// The chat-surface actions — always available now the chat stays on screen
-    /// beneath the voice dock.
+    /// The chat-specific actions — History/Documents/Memories/Calls moved to
+    /// the sidebar (they're destinations now, not toolbar-button-behind-a-
+    /// sheet), and Settings/Agent Log now live there too (the Workspace
+    /// section). Only the Review panel stays in `alwaysToolbarItems`. What's
+    /// left here is genuinely chat-only: which brain answers, how the avatar
+    /// shows, importing a document, and starting/stopping a call recording.
     private var chatToolbarItems: some View {
         Group {
             brainSwitcher
-
-            // New chat lives in the input bar now (next to mic/send) — not here.
-            Button { showHistory = true } label: {
-                Label("History", systemImage: "clock.arrow.circlepath")
-            }
-            .help("Browse and switch between past conversations")
-
-            Button { openWindow(id: M1K3App.agentLogWindowID) } label: {
-                Label("Agent Log", systemImage: "bubble.left.and.bubble.right")
-            }
-            .help("Review MCP tool calls captured from connected agents (opt-in)")
 
             // One control for the avatar: panel / full-window background / off.
             Menu {
@@ -820,15 +895,6 @@ struct ContentView: View {
             Button { showImporter = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
             }
-            Button { showDocuments = true } label: {
-                Label("Documents", systemImage: "books.vertical")
-            }
-            Button { showMemories = true } label: {
-                Label("Memories", systemImage: "brain")
-            }
-            Button { showCalls = true } label: {
-                Label("Calls", systemImage: "phone.bubble")
-            }
 
             Button {
                 if env.isRecording {
@@ -845,16 +911,6 @@ struct ContentView: View {
                     .animation(.default, value: env.isRecording)
             }
             .tint(env.isRecording ? .red : nil)
-
-            Button { env.review.isPresented.toggle() } label: {
-                Label("Review panel", systemImage: "sidebar.right")
-            }
-            .help("Open a side panel to review links and files (⌥⌘R)")
-            .keyboardShortcut("r", modifiers: [.command, .option])
-
-            SettingsLink {
-                Label("Settings", systemImage: "gearshape")
-            }
         }
     }
 }
@@ -928,6 +984,7 @@ private struct ModelGateView: View {
                 Text(loadingLabel(state))
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                DialUpMuteButton()
             }
         case let .failed(message):
             VStack(spacing: 14) {

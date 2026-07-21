@@ -72,7 +72,8 @@ generates; Apple Silicon only).
 | `Sources/` | SwiftPM modules: agent, inference, knowledge/RAG, voice, MCP |
 | `Tests/` | swift-testing suites per module |
 | `project.yml` | XcodeGen spec (the `.xcodeproj` is a build artifact) |
-| `PLAN.md` | Roadmap (append-only, signed) |
+| `ROADMAP.md` | What's next — kept current |
+| `PLAN.md` | Historical build log / decision record (append-only, signed) |
 | `docs/` | ADRs, model choices, MCP setup, release pipeline |
 
 ## MCP server

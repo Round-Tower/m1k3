@@ -193,6 +193,7 @@ struct HelloView: View {
                     Text(env.modelLoad.label(modelName: BrainTier.lil.displayName))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+                    DialUpMuteButton()
                 }
             case .failed:
                 VStack(spacing: 10) {

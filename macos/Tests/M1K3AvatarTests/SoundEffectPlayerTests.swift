@@ -13,8 +13,14 @@ import Testing
 @MainActor
 private final class Recorder {
     var played: [SoundEffect] = []
+    /// Loop transitions as (effect, started): true = start, false = stop.
+    var loops: [(SoundEffect, Bool)] = []
     func sink(_ effect: SoundEffect) {
         played.append(effect)
+    }
+
+    func loopSink(_ effect: SoundEffect, _ start: Bool) {
+        loops.append((effect, start))
     }
 }
 
@@ -62,5 +68,63 @@ struct SoundEffectPlayerTests {
         player.isEnabled = true
         player.play(.save)
         #expect(rec.played == [.save])
+    }
+
+    @Test("startLoop begins a loop when enabled; stopLoop ends it")
+    func loopStartStop() {
+        let rec = Recorder()
+        let player = SoundEffectPlayer(
+            isEnabled: true, isSpeaking: { false }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        player.startLoop(.dialup)
+        player.stopLoop(.dialup)
+        #expect(rec.loops.map(\.0) == [.dialup, .dialup])
+        #expect(rec.loops.map(\.1) == [true, false])
+    }
+
+    @Test("startLoop is a no-op when disabled or mid-speech")
+    func loopGated() {
+        let rec = Recorder()
+        let disabled = SoundEffectPlayer(
+            isEnabled: false, isSpeaking: { false }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        disabled.startLoop(.dialup)
+        let speaking = SoundEffectPlayer(
+            isEnabled: true, isSpeaking: { true }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        speaking.startLoop(.dialup)
+        #expect(rec.loops.isEmpty)
+    }
+
+    @Test("startLoop is idempotent — a second start does not re-fire")
+    func loopIdempotentStart() {
+        let rec = Recorder()
+        let player = SoundEffectPlayer(
+            isEnabled: true, isSpeaking: { false }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        player.startLoop(.dialup)
+        player.startLoop(.dialup)
+        #expect(rec.loops.count == 1)
+    }
+
+    @Test("stopLoop on a sound that never started is a no-op")
+    func stopWithoutStart() {
+        let rec = Recorder()
+        let player = SoundEffectPlayer(
+            isEnabled: true, isSpeaking: { false }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        player.stopLoop(.dialup)
+        #expect(rec.loops.isEmpty)
+    }
+
+    @Test("muting mid-loop stops the in-flight loop immediately")
+    func muteStopsLoop() {
+        let rec = Recorder()
+        let player = SoundEffectPlayer(
+            isEnabled: true, isSpeaking: { false }, sink: rec.sink, loopSink: rec.loopSink
+        )
+        player.startLoop(.dialup)
+        player.isEnabled = false
+        #expect(rec.loops.map(\.1) == [true, false])
     }
 }
