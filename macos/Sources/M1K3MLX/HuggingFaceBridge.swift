@@ -127,12 +127,15 @@ struct HubApiDownloader: MLXLMCommon.Downloader {
         let repo = Hub.Repo(id: id)
         let localPath = hub.localRepoLocation(repo)
         let startSizeMB = Self.directorySizeMB(localPath)
-        // Resolve to the PINNED commit for anything we ship. An explicit
-        // caller-supplied revision still wins (the eval harness pins its own),
-        // but the default is no longer "whatever main points at right now" —
-        // that made every download a moving target, and it is how an upstream
-        // change lands in a user's build with no code change and no review.
-        let resolvedRevision = revision ?? PinnedWeights.pin(for: id)?.revision ?? "main"
+        // Resolve to the PINNED commit for anything we ship — the pin beats the
+        // caller, deliberately. mlx-swift-lm's `resolve` passes a revision
+        // EXPLICITLY (defaulting to the literal "main"), so honouring callers
+        // here would mean honouring that default, i.e. no pin at all on every
+        // real load path. See WeightIntegrity.resolveRevision.
+        let resolvedRevision = WeightIntegrity.resolveRevision(
+            requested: revision,
+            pin: PinnedWeights.pin(for: id)
+        )
         downloadLog.notice(
             "snapshot start: \(id, privacy: .public) rev=\(resolvedRevision, privacy: .public) localMB=\(startSizeMB)"
         )

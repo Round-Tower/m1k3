@@ -102,6 +102,82 @@ public enum WeightIntegrity {
         case tampered(files: [String])
     }
 
+    /// Which revision a fetch of `repoID` must resolve against.
+    ///
+    /// ⚠️ THE PIN WINS OVER THE CALLER, and that precedence is the whole point.
+    /// The first cut had this the other way around (`requested ?? pin`), which
+    /// security review showed was dead code on every real load: mlx-swift-lm's
+    /// `resolve` passes `configuration.id`'s revision EXPLICITLY, and
+    /// `ModelConfiguration.Identifier.id` defaults it to the literal `"main"`
+    /// rather than nil. So the caller was never nil in production, the pin was
+    /// never consulted, and only `BrainWeightsFetcher`'s background pre-stage
+    /// (the sole nil-passing caller) honoured it. Every actual model load still
+    /// tracked a moving branch.
+    ///
+    /// A consequence worth stating plainly: an explicit revision for a PINNED
+    /// repo is ignored. That is correct — "main" from a third-party default
+    /// parameter is indistinguishable from a deliberate request, so honouring
+    /// callers means honouring the SDK's default, which means no pin at all.
+    /// Shipping different weights is a manifest change, by design.
+    public static func resolveRevision(requested: String?, pin: Pin?) -> String {
+        if let pin { return pin.revision }
+        return requested ?? "main"
+    }
+
+    /// What a receipt attests to for one file. Size alone is not enough: a
+    /// shard re-fetched from a compromised host is very likely to be the SAME
+    /// size (tensor shapes and quantisation all but fix it), so the receipt
+    /// must record something that moves when the file is rewritten.
+    public struct FileStamp: Equatable, Sendable, Codable {
+        public let size: Int
+        /// Modification time, seconds since the reference date. A re-download
+        /// always bumps this, which forces a rehash.
+        public let modified: Double
+
+        public init(size: Int, modified: Double) {
+            self.size = size
+            self.modified = modified
+        }
+    }
+
+    /// Persisted proof that a directory's bytes were hashed and matched, so
+    /// the multi-GB hash is paid at acquisition rather than on every launch.
+    public struct Receipt: Equatable, Sendable, Codable {
+        public let revision: String
+        public let files: [String: FileStamp]
+
+        public init(revision: String, files: [String: FileStamp]) {
+            self.revision = revision
+            self.files = files
+        }
+    }
+
+    /// Whether `receipt` still vouches for what is on disk.
+    ///
+    /// Every pinned file must be present, at the pinned size, and unchanged
+    /// since the receipt was written. The last clause is what security review
+    /// found missing: the first cut compared the receipt's revision and sizes
+    /// against the pin's own constants — a source constant compared to itself,
+    /// which could never disagree — so a same-size file re-fetched from a
+    /// compromised host after the first verified run was trusted forever
+    /// without being hashed again.
+    public static func receiptStillValid(
+        receipt: Receipt,
+        pin: Pin,
+        observed: [String: FileStamp]
+    ) -> Bool {
+        guard receipt.revision == pin.revision else { return false }
+        for (name, expected) in pin.files {
+            guard
+                let attested = receipt.files[name],
+                let actual = observed[name],
+                attested.size == expected.size,
+                actual == attested
+            else { return false }
+        }
+        return true
+    }
+
     /// The decision core. `observed` covers the files actually on disk; files
     /// present but not pinned are ignored (upstream is free to add a README).
     ///

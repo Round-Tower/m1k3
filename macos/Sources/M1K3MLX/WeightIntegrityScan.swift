@@ -102,41 +102,52 @@ public enum WeightIntegrityScan {
 
     // MARK: - Receipt
 
-    private struct Receipt: Codable {
-        let revision: String
-        let sizes: [String: Int]
-    }
-
-    /// True when a previous run verified THIS revision and every pinned file is
-    /// still present at the size that was verified. Sizes are checked against
-    /// the pin as well as the receipt, so a stale receipt from an older pin can
-    /// never vouch for the current one.
+    /// True when a previous run hashed THESE bytes under THIS revision and
+    /// nothing has been rewritten since. The modification-time clause is what
+    /// makes the shortcut safe: a re-download from a compromised host bumps
+    /// mtime even if the replacement shard is byte-for-byte the same size, so
+    /// it forces a fresh hash rather than inheriting the old attestation.
     private static func trustsReceipt(directory: URL, pin: WeightIntegrity.Pin) -> Bool {
         guard
             let data = try? Data(contentsOf: directory.appendingPathComponent(receiptName)),
-            let receipt = try? JSONDecoder().decode(Receipt.self, from: data),
-            receipt.revision == pin.revision
+            let receipt = try? JSONDecoder().decode(WeightIntegrity.Receipt.self, from: data)
         else { return false }
 
-        for (name, expected) in pin.files {
-            guard
-                receipt.sizes[name] == expected.size,
-                fileSize(at: directory.appendingPathComponent(name)) == expected.size
-            else { return false }
-        }
-        return true
+        return WeightIntegrity.receiptStillValid(
+            receipt: receipt,
+            pin: pin,
+            observed: stamps(in: directory, for: pin)
+        )
     }
 
     private static func writeReceipt(directory: URL, pin: WeightIntegrity.Pin) {
-        let receipt = Receipt(
+        let receipt = WeightIntegrity.Receipt(
             revision: pin.revision,
-            sizes: pin.files.mapValues(\.size)
+            files: stamps(in: directory, for: pin)
         )
         guard let data = try? JSONEncoder().encode(receipt) else { return }
         try? data.write(to: directory.appendingPathComponent(receiptName))
     }
 
     // MARK: - IO
+
+    /// Size + mtime for each pinned file present on disk.
+    private static func stamps(
+        in directory: URL,
+        for pin: WeightIntegrity.Pin
+    ) -> [String: WeightIntegrity.FileStamp] {
+        var result: [String: WeightIntegrity.FileStamp] = [:]
+        for name in pin.files.keys {
+            let path = directory.appendingPathComponent(name).path
+            guard
+                let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+                let size = attributes[.size] as? Int,
+                let modified = attributes[.modificationDate] as? Date
+            else { continue }
+            result[name] = .init(size: size, modified: modified.timeIntervalSinceReferenceDate)
+        }
+        return result
+    }
 
     private static func fileSize(at url: URL) -> Int? {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int

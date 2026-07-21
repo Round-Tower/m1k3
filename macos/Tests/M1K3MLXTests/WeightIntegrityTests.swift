@@ -126,6 +126,102 @@ struct WeightIntegrityTests {
     }
 }
 
+struct RevisionResolutionTests {
+    private static let pin = WeightIntegrity.Pin(
+        revision: "73bcf09092aa277861d5a191b989b666f7f32e8f",
+        files: ["model.safetensors": .init(size: 1, sha256: "aa")]
+    )
+
+    /// The bug this exists to prevent, found in security review of the first
+    /// cut. `resolve` in mlx-swift-lm passes `configuration.id`'s revision
+    /// EXPLICITLY, and `ModelConfiguration.Identifier.id` defaults it to the
+    /// literal `"main"` — never nil. So a `requested ?? pin` precedence meant
+    /// every real load resolved against a moving branch, and only the
+    /// background pre-stager (the one caller passing nil) honoured the pin.
+    /// Pinned means pinned: the manifest wins over any caller.
+    @Test("a caller-supplied revision does NOT override the pin — including the SDK's default main")
+    func pinBeatsCallerRevision() {
+        #expect(WeightIntegrity.resolveRevision(requested: "main", pin: Self.pin) == Self.pin.revision)
+        #expect(WeightIntegrity.resolveRevision(requested: "a-branch", pin: Self.pin) == Self.pin.revision)
+        #expect(WeightIntegrity.resolveRevision(requested: nil, pin: Self.pin) == Self.pin.revision)
+    }
+
+    @Test("an unpinned repo still honours the caller, then falls back to main")
+    func unpinnedHonoursCaller() {
+        #expect(WeightIntegrity.resolveRevision(requested: "abc123", pin: nil) == "abc123")
+        #expect(WeightIntegrity.resolveRevision(requested: nil, pin: nil) == "main")
+    }
+}
+
+struct ReceiptValidityTests {
+    private static let pin = WeightIntegrity.Pin(
+        revision: "aaaabbbbccccdddd",
+        files: [
+            "model.safetensors": .init(size: 2_263_022_417, sha256: "2a73c6c2"),
+            "config.json": .init(size: 938, sha256: "574349e5"),
+        ]
+    )
+
+    private static let stamps: [String: WeightIntegrity.FileStamp] = [
+        "model.safetensors": .init(size: 2_263_022_417, modified: 1000),
+        "config.json": .init(size: 938, modified: 1000),
+    ]
+
+    private static var receipt: WeightIntegrity.Receipt {
+        .init(revision: pin.revision, files: stamps)
+    }
+
+    @Test("an untouched directory verified under this revision is trusted without rehashing")
+    func untouchedIsTrusted() {
+        #expect(WeightIntegrity.receiptStillValid(receipt: Self.receipt, pin: Self.pin, observed: Self.stamps))
+    }
+
+    /// The second security-review finding. The first cut stored only the pin's
+    /// own constants, so `receipt.revision == pin.revision` compared a source
+    /// constant to itself and could never disagree, and the sizes were likewise
+    /// the pin's. A file re-fetched from a compromised host at the SAME SIZE —
+    /// plausible, since tensor shapes and quantisation all but fix a shard's
+    /// size — was therefore trusted without ever being hashed again.
+    /// Modification time is the cheap signal that a re-download really happened.
+    @Test("a re-downloaded file forces a rehash even when its size is unchanged")
+    func refetchAtSameSizeForcesRehash() {
+        var touched = Self.stamps
+        touched["model.safetensors"] = .init(size: 2_263_022_417, modified: 2000)
+        #expect(!WeightIntegrity.receiptStillValid(receipt: Self.receipt, pin: Self.pin, observed: touched))
+    }
+
+    @Test("a receipt from a different revision cannot vouch for the current pin")
+    func staleRevisionRejected() {
+        let stale = WeightIntegrity.Receipt(revision: "old-revision", files: Self.stamps)
+        #expect(!WeightIntegrity.receiptStillValid(receipt: stale, pin: Self.pin, observed: Self.stamps))
+    }
+
+    @Test("a file missing from disk invalidates the receipt")
+    func missingFileRejected() {
+        var partial = Self.stamps
+        partial["config.json"] = nil
+        #expect(!WeightIntegrity.receiptStillValid(receipt: Self.receipt, pin: Self.pin, observed: partial))
+    }
+
+    @Test("a receipt that never covered a pinned file cannot vouch for it")
+    func receiptMissingPinnedFileRejected() {
+        var thin = Self.stamps
+        thin["model.safetensors"] = nil
+        let receipt = WeightIntegrity.Receipt(revision: Self.pin.revision, files: thin)
+        #expect(!WeightIntegrity.receiptStillValid(receipt: receipt, pin: Self.pin, observed: Self.stamps))
+    }
+
+    @Test("a size that disagrees with the pin invalidates the receipt")
+    func sizeDisagreementRejected() {
+        let shrunk: [String: WeightIntegrity.FileStamp] = [
+            "model.safetensors": .init(size: 2_263_022_417, modified: 1000),
+            "config.json": .init(size: 12, modified: 1000),
+        ]
+        let receipt = WeightIntegrity.Receipt(revision: Self.pin.revision, files: shrunk)
+        #expect(!WeightIntegrity.receiptStillValid(receipt: receipt, pin: Self.pin, observed: shrunk))
+    }
+}
+
 struct PinnedWeightsTests {
     @Test("both shipping brains are pinned — the tiers a user can actually select")
     func shippingBrainsArePinned() {
