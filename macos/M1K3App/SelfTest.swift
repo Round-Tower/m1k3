@@ -437,6 +437,19 @@ enum SelfTest {
             await runVisionChatProbe()
         }
 
+        // 12. Optional prompt-size instrument (M1K3_SELFTEST_PROMPTSIZE=1):
+        //     intercepts the REAL assembled prompt at the provider seam and
+        //     counts it with the model's OWN tokenizer, broken down by section
+        //     (history / knowledge / memories / rules / template). Closes the
+        //     [SPIKE] named in HistoryBudgetPolicy — every context guarantee
+        //     today rests on a char≈token estimate (3.5 there, 4 in
+        //     DocumentChunker) that has never been checked, while the grounding
+        //     block is interpolated verbatim against a "~1100" token reserve.
+        //     See PromptSizeStage.swift.
+        if PromptSizeStage.isRequested {
+            await PromptSizeStage.run(emit: emit)
+        }
+
         emit("=== END SELF-TEST ===")
     }
 
