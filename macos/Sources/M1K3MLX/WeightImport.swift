@@ -174,11 +174,13 @@ public enum WeightImport {
     ///
     /// Not `private`: exposed at module level so the atomicity contract is
     /// directly testable without first needing to defeat the verify gate
-    /// above — a copy failure partway through must leave NO trace at
-    /// `destination`, because a half-copied file reads back as `.tampered`
-    /// on the very next load (mismatched bytes, present on disk), which
-    /// would make our own import path the source of a false supply-chain
-    /// accusation against itself.
+    /// above. A copy failure partway through must leave `destination` as it
+    /// was — untouched if it was empty, or the previous good copy if one
+    /// existed — never partial bytes, because a half-copied file reads back as
+    /// `.tampered` on the very next load (mismatched bytes, present on disk),
+    /// which would make our own import path the source of a false supply-chain
+    /// accusation against itself. The commit into place is atomic (see
+    /// `commitStaged`); everything before it happens in a sibling staging dir.
     ///
     /// Staging-then-move rather than copy-then-verify-then-commit: verifying
     /// a fresh copy would mean rehashing gigabytes we already hashed once at
@@ -216,14 +218,41 @@ public enum WeightImport {
             )
         }
 
-        try? fm.removeItem(at: destination)
+        try commitStaged(from: staging, to: destination)
+        return pin.files.count
+    }
+
+    /// Atomically replace `destination` with `staging`.
+    ///
+    /// ⚠️ Move-aside → move-in → drop-aside, NOT remove-then-move. The first
+    /// cut deleted the existing destination and only then moved staging in, so
+    /// a move failure after the delete (disk-full, permissions, a cross-volume
+    /// case) left the model with NO cache at all — worse than the "leaves no
+    /// trace" contract, and on the very path built not to be the source of a
+    /// false tamper verdict against itself. Now the old copy is set aside first
+    /// and removed only once the new one is in place; if the move throws, the
+    /// old copy goes back. `destination` is therefore only ever the previous
+    /// good copy or the new verified one, never absent. Review catch.
+    static func commitStaged(from staging: URL, to destination: URL) throws {
+        let fm = FileManager.default
         try fm.createDirectory(
             at: destination.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try fm.moveItem(at: staging, to: destination)
-
-        return pin.files.count
+        let hadOld = fm.fileExists(atPath: destination.path)
+        let aside = destination
+            .deletingLastPathComponent()
+            .appendingPathComponent(".m1k3-replacing-\(UUID().uuidString)")
+        if hadOld { try fm.moveItem(at: destination, to: aside) }
+        do {
+            try fm.moveItem(at: staging, to: destination)
+        } catch {
+            // Put the previous copy back before surfacing the failure — the
+            // replacement never arrived, so the old one is still the truth.
+            if hadOld { try? fm.moveItem(at: aside, to: destination) }
+            throw error
+        }
+        if hadOld { try? fm.removeItem(at: aside) }
     }
 }
 

@@ -203,6 +203,63 @@ struct WeightImportTests {
         #expect(!siblings.contains { $0.hasPrefix(".m1k3-import-") })
     }
 
+    // MARK: - 7b. The swap is genuinely atomic
+
+    /// Review catch. `install` used to `removeItem(destination)` and only THEN
+    /// `moveItem(staging → destination)`. If the move threw after the old copy
+    /// was already deleted, the `defer` wiped staging too — leaving the model
+    /// with NO cache at all, worse than the "leaves no trace" contract, and on
+    /// a path whose whole point is not to be the source of a false tamper
+    /// verdict against itself. The commit is now move-aside → move-in →
+    /// drop-aside, restoring the old copy if the move fails.
+    @Test("commit restores the previous copy when the move into place fails")
+    func commitRestoresOldOnFailure() throws {
+        let sandbox = try Sandbox()
+        let destination = sandbox.destination
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        try Data("old-good".utf8).write(to: destination.appendingPathComponent("model.safetensors"))
+
+        // A staging path that does not exist forces `moveItem` to throw — the
+        // deterministic stand-in for a disk-full / cross-volume move failure.
+        let missingStaging = sandbox.url.appendingPathComponent(".m1k3-import-\(UUID().uuidString)")
+
+        #expect(throws: (any Error).self) {
+            try WeightImport.commitStaged(from: missingStaging, to: destination)
+        }
+
+        // The old copy must still be there, intact — never sacrificed for a
+        // replacement that never arrived.
+        let survived = try Data(contentsOf: destination.appendingPathComponent("model.safetensors"))
+        #expect(String(data: survived, encoding: .utf8) == "old-good")
+        // And no aside temp left orphaned beside it.
+        let siblings = (try? FileManager.default.contentsOfDirectory(atPath: sandbox.url.path)) ?? []
+        #expect(!siblings.contains { $0.hasPrefix(".m1k3-replacing-") })
+    }
+
+    @Test("installing over an existing cache replaces it cleanly, no leftovers")
+    func installOverExistingReplaces() throws {
+        let sandbox = try Sandbox()
+        let destination = sandbox.destination
+        // A stale prior install already sitting at the destination.
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        try Data("stale".utf8).write(to: destination.appendingPathComponent("old-file.bin"))
+
+        let source = try sandbox.makeSource(["model.safetensors": "weights"])
+        let pin = Self.pin(contents: ["model.safetensors": "weights"])
+
+        let outcome = try WeightImport.install(
+            pin: pin, source: source, repoID: "org/repo", destination: destination
+        )
+
+        #expect(outcome == 1)
+        // New content present, stale file gone (fully replaced, not merged).
+        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("model.safetensors").path))
+        #expect(!FileManager.default.fileExists(atPath: destination.appendingPathComponent("old-file.bin").path))
+        // No aside/staging temp left behind.
+        let siblings = (try? FileManager.default.contentsOfDirectory(atPath: sandbox.url.path)) ?? []
+        #expect(!siblings.contains { $0.hasPrefix(".m1k3-replacing-") || $0.hasPrefix(".m1k3-import-") })
+    }
+
     // MARK: - 8. Source untouched
 
     @Test("never touches the source folder — copy, never move")

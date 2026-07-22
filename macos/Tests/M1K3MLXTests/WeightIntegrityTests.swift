@@ -359,6 +359,45 @@ struct PinnedWeightsTests {
         }
     }
 
+    /// The published JSON manifest and the Swift manifest the app enforces are
+    /// generated together by `pin_weights.py`, so they cannot disagree AT
+    /// generation. But `--check` needs a local snapshot plus a live HF call, so
+    /// it never runs in CI — leaving a hand-edit or a bad merge free to drift
+    /// the two silently. `MIRRORING_WEIGHTS.md` tells third parties to trust the
+    /// JSON, so a drift between it and what the app actually enforces is exactly
+    /// the thing worth guarding directly. This loads the checked-in JSON and
+    /// asserts it matches `PinnedWeights` field-for-field — pure, no network,
+    /// no weights. (Review catch.)
+    @Test("the published JSON manifest matches what the app enforces, field for field")
+    func publishedManifestMatchesPinnedWeights() throws {
+        struct FileEntry: Decodable { let size: Int; let sha256: String }
+        struct RepoEntry: Decodable { let revision: String; let downloadBase: String; let files: [String: FileEntry] }
+        struct Manifest: Decodable { let repos: [String: RepoEntry] }
+
+        // macos/Tests/M1K3MLXTests/<thisfile> → up three → macos/, then the JSON.
+        let manifestURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("weights-manifest.json")
+        let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
+
+        #expect(Set(manifest.repos.keys) == Set(PinnedWeights.all.keys))
+
+        for (repo, pin) in PinnedWeights.all {
+            let published = try #require(manifest.repos[repo], "\(repo) missing from JSON manifest")
+            #expect(published.revision == pin.revision, "\(repo) revision drift")
+            #expect(
+                WeightIntegrity.DownloadBase(rawValue: published.downloadBase) == PinnedWeights.downloadBase(for: repo),
+                "\(repo) downloadBase drift"
+            )
+            #expect(Set(published.files.keys) == Set(pin.files.keys), "\(repo) file-set drift")
+            for (name, pinnedFile) in pin.files {
+                let publishedFile = try #require(published.files[name], "\(repo)/\(name) missing from JSON")
+                #expect(publishedFile.size == pinnedFile.size, "\(repo)/\(name) size drift")
+                #expect(publishedFile.sha256 == pinnedFile.sha256, "\(repo)/\(name) sha256 drift")
+            }
+        }
+    }
+
     @Test("the weight-bearing files are pinned, not just the small configs")
     func weightsThemselvesArePinned() {
         for (repo, pin) in PinnedWeights.all {
