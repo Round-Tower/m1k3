@@ -391,6 +391,16 @@ final class AppEnvironment {
     /// chat send path). Stays `.idle` for the Apple Foundation Models default.
     private(set) var modelLoad: ModelLoadState = .idle
 
+    /// The Advanced pane's "Import weights from a folder…" affordance —
+    /// see AppEnvironment+WeightImport.swift for the run, WeightImportDisplay
+    /// (M1K3MLX) for the pure outcome→copy mapping this wraps. Plain `var`
+    /// (not `private(set)`): written from the extension file, same as
+    /// `brainUpgrade` — `private(set)`'s setter is file-scoped in Swift, and
+    /// the writer lives in a different file on purpose (AppEnvironment.swift
+    /// stays the composition root, not a dumping ground for every feature's
+    /// side-effect glue).
+    var weightImportState: WeightImportRunState = .idle
+
     /// Last ingest outcome, surfaced to the UI.
     private(set) var lastIngestStatus: String?
     /// The last successfully ingested document's title, threaded properly for

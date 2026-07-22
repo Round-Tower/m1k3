@@ -1,0 +1,93 @@
+//
+//  PinnedWeights.swift
+//  M1K3MLX
+//
+//  GENERATED — do not hand-edit. Regenerate with:
+//      python3 macos/tools/weights/pin_weights.py
+//
+//  The manifest WeightIntegrity checks downloaded weights against. It
+//  lives in our source, under review, on purpose: fetching the expected
+//  digest from the same host that serves the file proves nothing, since
+//  whoever can swap the file can swap its published hash too.
+//
+//  Each digest was computed from a local snapshot that had been run and
+//  evaluated, then cross-checked against HuggingFace's published LFS oid
+//  where one exists. The generator hard-stops on any disagreement.
+//
+//  Changing a pin is a deliberate act: it means shipping different
+//  weights, and it should be reviewed like any other behaviour change.
+//
+
+import Foundation
+
+/// The shipped weight manifest. Repos absent from this table load
+/// unverified by design — see `WeightIntegrity.Verdict.unpinned`.
+public enum PinnedWeights {
+    public static let all: [String: WeightIntegrity.Pin] = [
+        "mlx-community/Qwen3-4B-Instruct-2507-4bit": .init(
+            revision: "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+            files: [
+                "added_tokens.json": .init(size: 707, sha256: "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680"),
+                "chat_template.jinja": .init(size: 4040, sha256: "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"),
+                "config.json": .init(size: 938, sha256: "574349e5a343236546fda55e4744a76e181f534182d7dc60ff1bad7e7a502849"),
+                "generation_config.json": .init(size: 238, sha256: "835fffe355c9438e7a25be099b3fccaa98350b83451f9fd2d99512e74f1ade48"),
+                "model.safetensors": .init(size: 2_263_022_417, sha256: "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f"),
+                "model.safetensors.index.json": .init(size: 63964, sha256: "388d811b8b7c2608dd04cce1bcb04a8bf715d19b42790894e6d3427ff429a777"),
+                "special_tokens_map.json": .init(size: 613, sha256: "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"),
+                "tokenizer.json": .init(size: 11_422_654, sha256: "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"),
+                "tokenizer_config.json": .init(size: 5440, sha256: "4397cc477eb6d79715ccd2000accd6b3531928f30029665832fa1b255f24d2b9"),
+                "vocab.json": .init(size: 2_776_833, sha256: "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"),
+            ]
+        ),
+        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": .init(
+            revision: "6c3ae70858513f1a78e9cdca3cae330d9075cd2a",
+            files: [
+                "added_tokens.json": .init(size: 707, sha256: "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680"),
+                "chat_template.jinja": .init(size: 4116, sha256: "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5"),
+                "config.json": .init(size: 937, sha256: "e7dfa5b73fb2a03cbc8fb40c394e95b99f03348e237f7f28e7a1daf56a2169bb"),
+                "generation_config.json": .init(size: 117, sha256: "28396d421a2108acce96383f6a7de78008f7f1b17f807958f3c14c51dbfb65fb"),
+                "model.safetensors": .init(size: 335_296_756, sha256: "3d773d5ee582eda445daeee23f7a2b76124011796df244ddb45e22638fdb7cde"),
+                "model.safetensors.index.json": .init(size: 49770, sha256: "90d82744cdb6b7d093f0b812fc21a49b6ffa9d0084a45428f0cfd01eb4adbe12"),
+                "special_tokens_map.json": .init(size: 613, sha256: "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"),
+                "tokenizer.json": .init(size: 11_423_705, sha256: "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a"),
+                "tokenizer_config.json": .init(size: 5404, sha256: "443bfa629eb16387a12edbf92a76f6a6f10b2af3b53d87ba1550adfcf45f7fa0"),
+                "vocab.json": .init(size: 2_776_833, sha256: "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"),
+            ]
+        ),
+        "mlx-community/gemma-4-12B-it-4bit": .init(
+            revision: "73bcf09092aa277861d5a191b989b666f7f32e8f",
+            files: [
+                "chat_template.jinja": .init(size: 17466, sha256: "36e3a42e5cf14cd0020e72d92e1fdd9970f59b82170e421f0cbe1bb42bead3f0"),
+                "config.json": .init(size: 5415, sha256: "fbc1c1cb48ed86ec98482b2d41f5a03d3991aba74b7c29a93d430761e6518a38"),
+                "generation_config.json": .init(size: 260, sha256: "a8349d9bd64cc5841297fcb5002f0fdc4749c473c8f1b10ea337f9ce4ee7014e"),
+                "model-00001-of-00002.safetensors": .init(size: 5_351_756_584, sha256: "0d58feed0c98a69c07317b4481aeae5ab2785f12a496ea96ab24c4842808de78"),
+                "model-00002-of-00002.safetensors": .init(size: 1_389_282_927, sha256: "5b00a1bcb596ce6e827b4cdea6ecf2a0f35bb01306eb87c1ea4b3bcde36c7755"),
+                "model.safetensors.index.json": .init(size: 135_329, sha256: "9ac99e7a6cf3e4d40eb8df01644fe9c04036ace94f3389df35db9d9449758516"),
+                "processor_config.json": .init(size: 868, sha256: "016a1db9c4f41ea0c61919c46855ea5e7c45c6e4ae4bfbedfb5b6bed79a2fe92"),
+                "tokenizer.json": .init(size: 32_169_626, sha256: "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"),
+                "tokenizer_config.json": .init(size: 2719, sha256: "fc1384a911d2c9860ac07bc3ceafff20bff26695991744b7dbe5e1e4522bfa57"),
+            ]
+        ),
+    ]
+
+    /// Which download root each pinned repo belongs under. LLM weights
+    /// and embedder weights live in genuinely different places (the 2.x
+    /// layout, preserved so existing caches keep working), so anything
+    /// installing files has to know which — assuming one base puts the
+    /// embedder where its loader never looks.
+    public static let bases: [String: WeightIntegrity.DownloadBase] = [
+        "mlx-community/Qwen3-4B-Instruct-2507-4bit": .llm,
+        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": .embedder,
+        "mlx-community/gemma-4-12B-it-4bit": .llm,
+    ]
+
+    /// The pin for `repoID`, or nil when the repo ships unpinned.
+    public static func pin(for repoID: String) -> WeightIntegrity.Pin? {
+        all[repoID]
+    }
+
+    /// The download root for `repoID`, or nil when the repo is unpinned.
+    public static func downloadBase(for repoID: String) -> WeightIntegrity.DownloadBase? {
+        bases[repoID]
+    }
+}

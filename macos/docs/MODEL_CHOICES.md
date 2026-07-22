@@ -255,6 +255,40 @@ item its own TDD'd id-swap or eval.
 
 ---
 
+## ⚠️ Promoting a brain now requires re-pinning (since 2026-07-21)
+
+Shipped model weights are pinned to a commit SHA and verified against sha256
+digests committed in `Sources/M1K3MLX/PinnedWeights.swift` — see
+[ADR 0002](adr/0002-pin-and-verify-downloaded-model-weights.md). Swapping a
+model id is therefore **two** changes, not one:
+
+```bash
+# 1. download + actually exercise the new checkpoint (pin bytes you have run)
+# 2. regenerate the manifests — cross-checks against HF, hard-stops on mismatch
+python3 macos/tools/weights/pin_weights.py
+```
+
+That writes **two** files from the same data: `PinnedWeights.swift` (what the
+app enforces) and `weights-manifest.json` (the published, machine-readable
+twin — see [MIRRORING_WEIGHTS.md](MIRRORING_WEIGHTS.md)). Commit both; a
+published manifest that disagrees with what the app enforces is worse than
+publishing none. `--check` fails if either is stale.
+
+The script also refuses to pin unless the local snapshot's recorded commit
+matches the revision being pinned, so a stale local cache cannot silently
+produce a manifest that makes every honest download look tampered with.
+
+Add the repo to `SHIPPED_REPOS` in that script first. An unpinned repo still
+loads (`WeightIntegrity.Verdict.unpinned`), so **a forgotten re-pin fails open,
+silently** — it does not break the build. The `PinnedWeightsTests` suite is the
+backstop: it asserts every user-selectable brain has a pin with real weights in
+it. Extend it when a tier changes.
+
+Eval A/B overrides (`M1K3_SELFTEST_CHATEVAL_MLX_MODEL`) and spike checkpoints
+are deliberately left unpinned so the evaluation loop stays usable.
+
+---
+
 ## Decision log
 
 - **2026-07-02 (later): HUGE RETIRED — Qwen3-8B leaves the catalogue; three tiers (Mini/Lil/Big).**
