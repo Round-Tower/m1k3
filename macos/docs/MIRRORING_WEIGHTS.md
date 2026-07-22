@@ -127,3 +127,23 @@ they exist. The script hard-stops if the two disagree, and refuses to pin at all
 unless the local snapshot's recorded commit matches the revision being pinned —
 pinning today's revision beside yesterday's bytes would make every honest
 download look tampered with.
+
+### Publishing a cold archive (maintainers)
+
+To put the pinned bytes somewhere they cannot be stranded if upstream deletes
+or force-pushes a repo (issue #75):
+
+```bash
+python3 macos/tools/weights/archive_weights.py               # verify + write LICENSE/NOTICE, no multi-GB copy
+python3 macos/tools/weights/archive_weights.py --stage        # also copy the weights into the staging tree
+python3 macos/tools/weights/archive_weights.py --push-hf ORG   # stage + upload to hf.co/ORG/<repo> (needs a token)
+```
+
+The default run verifies every file against the manifest and hard-stops on any
+mismatch — it will not archive bytes that disagree with the pin. It also writes
+a `LICENSE` (Apache-2.0) and a `NOTICE` into each repo's tree: all three models
+are Apache-2.0, but the `mlx-community` quant we download ships neither, so the
+archive adds them (a modification notice for the 4-bit MLX conversion), making
+our copy more compliant than the source. Cloudflare R2 is a print-only step
+because `rclone`/`aws` aren't installed here — run the printed command where
+they are.
